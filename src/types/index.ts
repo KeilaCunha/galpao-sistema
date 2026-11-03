@@ -91,7 +91,41 @@ export interface DestinoEntrada {
   data?: string;
   boa: number | null;
   fraca: number | null;
+  /** Quantidade perdida (podre, falta de peso...) alocada nesta linha */
+  perda?: number | null;
+  motivo?: string;
+  saidaId?: string;
 }
+
+/** Carga que chegou no galpão — a folha se monta a partir disso */
+export interface EntradaLancamento {
+  id: string;
+  data: string;
+  produtor: string;
+  mercadoria: string;
+  qtd: number;
+  preco: number | null;
+  /** Caixas a mais quando a carga rendeu além do informado */
+  rendimentoExtra?: number;
+  /** Destinos desta carga — preenchidos na própria linha da operação */
+  destinos?: DestinoEntrada[];
+}
+
+export type TipoSaida = "cliente" | "perda";
+
+/** Pedido ou perda lançado — o sistema divide sozinho entre os produtores */
+export interface SaidaLancamento {
+  id: string;
+  data: string;
+  tipo: TipoSaida;
+  cliente?: string;
+  motivo?: string;
+  mercadoria: string;
+  boa: number;
+  fraca: number;
+}
+
+export const MOTIVOS_PERDA = ["Podre", "Falta de peso", "Avaria", "Quebra", "Outro"] as const;
 
 /**
  * Linha da planilha diária (versão digital da folha de papel usada no galpão).

@@ -218,8 +218,18 @@ export const produtosMock: Produto[] = [
     estoqueAtual: 0,
     estoqueMinimo: 10,
     descricao: "Abobrinha italiana, vendida por quilo.",
-    situacao: "inativo",
+    situacao: "ativo",
     tipos: ["Italiana", "Brasileira"],
+  },
+  {
+    id: "prod-11",
+    nome: "Jiló",
+    unidade: "caixa",
+    estoqueAtual: 10,
+    estoqueMinimo: 5,
+    descricao: "Jiló fresco, caixa.",
+    situacao: "ativo",
+    tipos: [],
   },
 ];
 

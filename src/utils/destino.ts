@@ -6,7 +6,9 @@ export interface ResumoDestino {
   boa: number;
   /** Soma das quantidades "fraca" de todos os destinos */
   fraca: number;
-  /** Total geral (boa + fraca) */
+  /** Soma das perdas alocadas */
+  perda: number;
+  /** Total geral (boa + fraca + perda) */
   total: number;
 }
 
@@ -17,13 +19,15 @@ export interface ResumoDestino {
 export function resumoDestinos(destinos: DestinoEntrada[]): ResumoDestino {
   let boa = 0;
   let fraca = 0;
+  let perda = 0;
 
   for (const destino of destinos) {
     boa += destino.boa ?? 0;
     fraca += destino.fraca ?? 0;
+    perda += destino.perda ?? 0;
   }
 
-  return { boa, fraca, total: boa + fraca };
+  return { boa, fraca, perda, total: boa + fraca + perda };
 }
 
 /**
@@ -41,6 +45,7 @@ export function resumoComCadeia(
 ): ResumoDestino {
   let boa = 0;
   let fraca = 0;
+  let perda = 0;
 
   let linhaAtual: LinhaPlanilha = linha;
   let dataAtual = data;
@@ -52,6 +57,7 @@ export function resumoComCadeia(
     const proprio = resumoDestinos(linhaAtual.destinos);
     boa += proprio.boa;
     fraca += proprio.fraca;
+    perda += proprio.perda;
 
     const proximaData = addDays(dataAtual, 1);
     const continuacao = getLinhas(proximaData).find((l) => l.origemLinhaId === linhaAtual.id);
@@ -61,7 +67,7 @@ export function resumoComCadeia(
     dataAtual = proximaData;
   }
 
-  return { boa, fraca, total: boa + fraca };
+  return { boa, fraca, perda, total: boa + fraca + perda };
 }
 
 /**

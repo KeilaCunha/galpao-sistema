@@ -49,6 +49,13 @@ export function weekdayLabel(isoDate: string): string {
   return nome.charAt(0).toUpperCase() + nome.slice(1);
 }
 
+/** Formata data ISO como "26 de novembro de 2026" */
+export function formatDateLong(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const date = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric" }).format(date);
+}
+
 /** Formata número com separador de milhar (padrão brasileiro) */
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("pt-BR").format(value);
