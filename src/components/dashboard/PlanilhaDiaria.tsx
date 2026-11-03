@@ -93,20 +93,20 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
       <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-3">
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-neutral-600">Operações</h3>
-        <p className="text-[11px] text-neutral-400">Digite na linha. O destino aparece em chips sozinho.</p>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-600">Operações</h3>
+        <p className="text-xs text-neutral-400">Digite na linha. O destino aparece em chips sozinho.</p>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[920px] border-collapse text-sm">
           <thead>
             <tr className="bg-neutral-50">
-              <th className="min-w-[150px] border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Produtor</th>
-              <th className="w-16 border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>
-              <th className="w-32 border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>
-              <th className="min-w-[140px] border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>
-              <th className="w-20 border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
-              <th className="border-b border-neutral-200 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Destino</th>
+              <th className="min-w-[150px] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Produtor</th>
+              <th className="w-16 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>
+              <th className="w-32 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>
+              <th className="min-w-[140px] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>
+              <th className="w-20 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
+              <th className="border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Destino</th>
               <th className="w-10 border-b border-neutral-200" />
             </tr>
           </thead>
@@ -122,7 +122,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                     {sobraHerdada ? (
                       <div className="px-2 py-1.5">
                         <p className="font-semibold text-neutral-800">{linha.produtor || "—"}</p>
-                        <span className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-neutral-400">
+                        <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400">
                           <CornerDownRight size={10} /> Sobra de {formatDate(linha.origemSobraDe ?? "")}
                         </span>
                       </div>
@@ -162,7 +162,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                           {resumo.fraca > 0 && (
                             <span className="text-warning-600">
                               {" + "}{resumo.fraca}
-                              <sup className="text-[9px]">fr</sup>
+                              <sup className="text-[10px]">fr</sup>
                             </span>
                           )}
                           {resumo.perda > 0 && (
@@ -170,13 +170,13 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                           )}
                         </p>
                         {status === "parcial" && (
-                          <p className="mt-0.5 text-[11px] font-medium text-danger-500">falta fazer {sobra}</p>
+                          <p className="mt-0.5 text-xs font-medium text-danger-500">falta fazer {sobra}</p>
                         )}
                         {status === "completo" && (
-                          <p className="mt-0.5 text-[11px] font-medium text-success-600">completo</p>
+                          <p className="mt-0.5 text-xs font-medium text-success-600">completo</p>
                         )}
                         {status === "excedente" && (
-                          <p className="mt-0.5 text-[11px] font-medium text-danger-500">rendeu a mais</p>
+                          <p className="mt-0.5 text-xs font-medium text-danger-500">rendeu a mais</p>
                         )}
                       </div>
                     )}
@@ -184,7 +184,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   <td className="p-1 align-top">
                     {sobraHerdada ? (
                       <div className="px-2 py-1.5">
-                        <p className="text-[11px] font-bold tracking-wide text-neutral-400">{abrevMercadoria(linha.mercadoria)}</p>
+                        <p className="text-xs font-bold tracking-wide text-neutral-400">{abrevMercadoria(linha.mercadoria)}</p>
                         <p className="text-sm text-neutral-700">{linha.mercadoria}</p>
                       </div>
                     ) : (
@@ -225,30 +225,30 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                       {linha.destinos.map((destino) => (
                         <span key={destino.id} className="contents">
                           {(destino.boa ?? 0) > 0 && (
-                            <span className="inline-flex items-center rounded-md bg-success-50 px-2 py-0.5 text-[11px] font-bold text-success-700">
+                            <span className="inline-flex items-center rounded-md bg-success-50 px-2 py-0.5 text-xs font-bold text-success-700">
                               {destino.boa} {abrevCliente(destino.cliente)}
                             </span>
                           )}
                           {(destino.fraca ?? 0) > 0 && (
-                            <span className="inline-flex items-center rounded-md bg-warning-50 px-2 py-0.5 text-[11px] font-bold text-warning-700">
+                            <span className="inline-flex items-center rounded-md bg-warning-50 px-2 py-0.5 text-xs font-bold text-warning-700">
                               {destino.fraca} {abrevCliente(destino.cliente)}
-                              <sup className="ml-0.5 text-[8px] font-extrabold">fr</sup>
+                              <sup className="ml-0.5 text-[9px] font-extrabold">fr</sup>
                             </span>
                           )}
                           {(destino.perda ?? 0) > 0 && (
-                            <span className="inline-flex items-center rounded-md bg-danger-50 px-2 py-0.5 text-[11px] font-bold text-danger-600">
+                            <span className="inline-flex items-center rounded-md bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
                               {destino.perda} perda
                             </span>
                           )}
                         </span>
                       ))}
                       {sobra > 0 && (
-                        <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-[11px] font-bold text-danger-600">
+                        <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
                           {sobra} sobra
                         </span>
                       )}
                       {linha.destinos.length === 0 && (
-                        <span className="text-[11px] text-neutral-400">+ destino</span>
+                        <span className="text-xs text-neutral-400">+ destino</span>
                       )}
                     </div>
                   </td>

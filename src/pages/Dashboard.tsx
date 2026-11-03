@@ -25,8 +25,8 @@ function Stat({
   };
   return (
     <div className="text-center">
-      <p className={`text-2xl font-bold tabular-nums ${cores[cor ?? "neutral"]}`}>{value}</p>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
+      <p className={`text-3xl font-bold tabular-nums ${cores[cor ?? "neutral"]}`}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
     </div>
   );
 }
@@ -80,8 +80,8 @@ export default function Dashboard() {
               <Leaf size={18} strokeWidth={2.2} />
             </span>
             <div>
-              <p className="text-[13px] font-bold uppercase tracking-widest text-neutral-800">Galpão Empório</p>
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-neutral-400">
+              <p className="text-[15px] font-bold uppercase tracking-widest text-neutral-800">Galpão Empório</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-neutral-400">
                 Controle de produção
               </p>
             </div>
@@ -92,8 +92,8 @@ export default function Dashboard() {
               <ChevronLeft size={20} />
             </button>
             <div className="min-w-[190px] text-center">
-              <p className="text-sm font-bold uppercase tracking-wide text-neutral-800">{weekdayLabel(data)}</p>
-              <p className="text-[11px] text-neutral-500">{formatDateLong(data)}</p>
+              <p className="text-base font-bold uppercase tracking-wide text-neutral-800">{weekdayLabel(data)}</p>
+              <p className="text-xs text-neutral-500">{formatDateLong(data)}</p>
             </div>
             <button type="button" onClick={() => setData((d) => addDays(d, 1))} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Próximo dia">
               <ChevronRight size={20} />
@@ -135,7 +135,7 @@ export default function Dashboard() {
 
       <div className="mx-auto max-w-[1400px] px-6 py-5">
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
-          <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-neutral-400">
+          <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
           </p>
           <div className="flex flex-wrap items-end gap-5">
