@@ -12,7 +12,6 @@ export const ROUTES: RouteInfo[] = [
   { path: "/clientes", title: "Clientes", subtitle: "Gerencie os clientes do galpão" },
   { path: "/estoque", title: "Estoque", subtitle: "Controle visual do estoque" },
   { path: "/anotacoes", title: "Anotações", subtitle: "Registros diários de fornecedores e produtos" },
-  { path: "/configuracoes", title: "Configurações", subtitle: "Preferências do sistema" },
 ];
 
 export function getRouteInfo(pathname: string): RouteInfo {

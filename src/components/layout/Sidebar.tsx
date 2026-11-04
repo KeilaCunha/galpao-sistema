@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   Leaf,
   Package,
-  Settings,
   Truck,
   Users,
   Warehouse,
@@ -51,23 +50,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <div className="border-t border-neutral-100 px-3 py-4">
-        <NavLink
-          to="/configuracoes"
-          className={({ isActive }) =>
-            cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-brand-600 text-white shadow-sm shadow-brand-900/15"
-                : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700",
-            )
-          }
-        >
-          <Settings size={18} strokeWidth={2} />
-          Configurações
-        </NavLink>
-      </div>
     </aside>
   );
 }

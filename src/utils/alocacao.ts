@@ -209,6 +209,10 @@ export function dataDoDestino(destino: DestinoEntrada, entrada: EntradaLancament
   return destino.data || entrada.data;
 }
 
+export function destinosDoDia(entrada: EntradaLancamento, data: string): DestinoEntrada[] {
+  return destinosDa(entrada).filter((destino) => dataDoDestino(destino, entrada) === data);
+}
+
 export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: string): number {
   const destinos = destinosDa(entrada).filter((destino) =>
     ateData ? dataDoDestino(destino, entrada) < ateData : true,
@@ -255,45 +259,18 @@ export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[
   );
 }
 
-/** Folha do dia: linhas do dia (inclusive em branco) + sobras de dias anteriores. */
+/** Folha do dia: só as linhas lançadas naquela data. Sobra de outro dia fica no dia da entrada e na aba Sobras. */
 export function montarLinhas(entradas: EntradaLancamento[], data: string): LinhaPlanilha[] {
-  const linhas: LinhaPlanilha[] = [];
-
-  const sobras = entradas
-    .filter((entrada) => entradaValida(entrada) && entrada.data < data)
+  return entradas
+    .filter((item) => item.data === data)
     .map((entrada) => ({
-      entrada,
-      restante: restanteEntradaDireto(entrada, data),
-    }))
-    .filter((item) => item.restante > 0)
-    .sort((a, b) => a.entrada.data.localeCompare(b.entrada.data));
-
-  for (const { entrada, restante } of sobras) {
-    const destinos = destinosDa(entrada).filter((destino) => dataDoDestino(destino, entrada) >= data);
-    linhas.push({
-      id: `sobra-${entrada.id}-${data}`,
-      produtor: entrada.produtor,
-      qtd: restante,
-      mercadoria: entrada.mercadoria,
-      preco: entrada.preco,
-      destinos,
-      origemSobraDe: entrada.data,
-      origemLinhaId: entrada.id,
-    });
-  }
-
-  for (const entrada of entradas.filter((item) => item.data === data)) {
-    linhas.push({
       id: entrada.id,
       produtor: entrada.produtor,
       qtd: capacidadeEntrada(entrada) || null,
       mercadoria: entrada.mercadoria,
       preco: entrada.preco,
       destinos: destinosDa(entrada),
-    });
-  }
-
-  return linhas;
+    }));
 }
 
 export function sobrasAtuais(entradas: EntradaLancamento[]) {
@@ -310,12 +287,13 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
 
 /** Sobra ainda em estoque, agrupada por dia — com o fornecedor da carga. */
 export function sobrasPorDia(entradas: EntradaLancamento[]) {
-  const porDia = new Map<string, { produtor: string; mercadoria: string; restante: number }[]>();
+  const porDia = new Map<string, { entradaId: string; produtor: string; mercadoria: string; restante: number }[]>();
 
   for (const item of sobrasAtuais(entradas)) {
     const dia = item.entrada.data;
     const lista = porDia.get(dia) ?? [];
     lista.push({
+      entradaId: item.entrada.id,
       produtor: item.entrada.produtor || "Sem fornecedor",
       mercadoria: item.entrada.mercadoria,
       restante: item.restante,

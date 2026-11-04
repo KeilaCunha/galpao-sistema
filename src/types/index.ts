@@ -85,7 +85,7 @@ export interface Anotacao {
 export interface DestinoEntrada {
   id: string;
   cliente: string;
-  /** Tipo/grade do produto entregue a este destino (ex: "AA", "A", "Especial") */
+  /** Classificação do destino: tomate (AAA, AA, A, FRACO, Saladão, Verde) ou demais (BOM, GRAUDO, FRACO) */
   tipo?: string;
   /** Data de entrega deste destino (ISO yyyy-mm-dd). Padrão: dia da planilha. */
   data?: string;

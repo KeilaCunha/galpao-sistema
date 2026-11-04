@@ -4,7 +4,6 @@ import { DataProvider } from "./context/DataContext";
 import { PlanilhaProvider } from "./context/PlanilhaContext";
 import { ToastProvider } from "./context/ToastContext";
 import Clientes from "./pages/Clientes";
-import Configuracoes from "./pages/Configuracoes";
 import Dashboard from "./pages/Dashboard";
 import Estoque from "./pages/Estoque";
 import Fornecedores from "./pages/Fornecedores";
@@ -23,7 +22,6 @@ export default function App() {
                 <Route path="/produtos" element={<Produtos />} />
                 <Route path="/clientes" element={<Clientes />} />
                 <Route path="/estoque" element={<Estoque />} />
-                <Route path="/configuracoes" element={<Configuracoes />} />
               </Route>
             </Routes>
           </BrowserRouter>

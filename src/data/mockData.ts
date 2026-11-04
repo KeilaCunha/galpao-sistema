@@ -120,7 +120,7 @@ export const produtosMock: Produto[] = [
     estoqueMinimo: 20,
     descricao: "Tomate salada, ideal para consumo in natura.",
     situacao: "ativo",
-    tipos: ["A", "AA", "AAA"],
+    tipos: ["AAA", "AA", "A", "FRACO", "Saladão", "Verde"],
   },
   {
     id: "prod-2",

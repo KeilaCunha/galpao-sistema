@@ -1,7 +1,8 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Settings, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
+import { Button } from "../components/ui/Button";
 import { usePlanilha } from "../context/PlanilhaContext";
 import type { SaidaLancamento } from "../types";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
@@ -32,11 +33,11 @@ function Stat({
 }
 
 export default function Dashboard() {
-  const { dataInicial, getLinhas, getSaidasDoDia, garantirLinhasDoDia, resumo, sobras } = usePlanilha();
-  const navigate = useNavigate();
+  const { dataInicial, entradas, getLinhas, getSaidasDoDia, garantirLinhasDoDia, resumo, sobras } = usePlanilha();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
+  const [destinoSobraId, setDestinoSobraId] = useState<string | null>(null);
 
   useEffect(() => {
     garantirLinhasDoDia(data);
@@ -103,10 +104,6 @@ export default function Dashboard() {
                 Hoje
               </button>
             )}
-            <div className="mx-2 h-6 w-px bg-neutral-200" />
-            <button type="button" onClick={() => navigate("/configuracoes")} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100" title="Configurações">
-              <Settings size={18} />
-            </button>
           </div>
         </div>
       </header>
@@ -212,7 +209,7 @@ export default function Dashboard() {
               <div className="flex flex-col items-center gap-3 py-20 text-center">
                 <CalendarDays size={36} className="text-neutral-300" />
                 <p className="text-sm font-medium text-neutral-500">Nada sobrando no estoque.</p>
-                <p className="text-xs text-neutral-400">Quando sobrar no dia, aparece aqui. Se for para destino, some sozinho.</p>
+                <p className="text-xs text-neutral-400">Quando sobrar no dia, aparece aqui. Clique em Destino para vender. Some sozinho.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-5">
@@ -232,11 +229,12 @@ export default function Dashboard() {
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Fornecedor</th>
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
                             <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase text-warning-600">Sobra</th>
+                            <th className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Destino</th>
                           </tr>
                         </thead>
                         <tbody>
                           {dia.itens.map((item) => (
-                            <tr key={`${item.produtor}-${item.mercadoria}`} className="border-t border-neutral-100">
+                            <tr key={item.entradaId} className="border-t border-neutral-100">
                               <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
                               <td className="px-4 py-3">
                                 <p className="font-medium text-neutral-800">{item.mercadoria}</p>
@@ -246,6 +244,11 @@ export default function Dashboard() {
                                 <span className="inline-flex items-center rounded-md border border-dashed border-warning-500/40 bg-warning-50 px-2.5 py-1 text-sm font-bold text-warning-700">
                                   {item.restante} cx
                                 </span>
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <Button size="sm" variant="outline" onClick={() => setDestinoSobraId(item.entradaId)}>
+                                  Destino
+                                </Button>
                               </td>
                             </tr>
                           ))}
@@ -259,6 +262,19 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      <DestinosModal
+        open={!!destinoSobraId}
+        onClose={() => setDestinoSobraId(null)}
+        entrada={entradas.find((e) => e.id === destinoSobraId)}
+        dataDestino={data}
+        descricao={(() => {
+          const entrada = entradas.find((e) => e.id === destinoSobraId);
+          if (!entrada) return undefined;
+          const item = sobrasPendentes.flatMap((dia) => dia.itens).find((s) => s.entradaId === entrada.id);
+          return `${entrada.produtor || "Produtor"} · ${entrada.mercadoria || "Mercadoria"} · sobra ${item?.restante ?? 0} cx`;
+        })()}
+      />
     </div>
   );
 }
