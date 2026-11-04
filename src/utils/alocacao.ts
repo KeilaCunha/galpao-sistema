@@ -2,7 +2,7 @@ import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento 
 import { abrevMercadoria, mercadoriasIguais } from "./abrev";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
-  return entrada.qtd + (entrada.rendimentoExtra ?? 0);
+  return entrada.qtd;
 }
 
 export function entradaValida(entrada: EntradaLancamento): boolean {
@@ -249,11 +249,11 @@ export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[
       .map((destino) => ({
         id: destino.id,
         data: dataDoDestino(destino, entrada),
-        tipo: (destino.perda ?? 0) > 0 ? "perda" : "cliente",
+        tipo: (destino.perda ?? 0) > 0 && !(destino.boa ?? 0) && !(destino.fraca ?? 0) ? "perda" : "cliente",
         cliente: destino.cliente,
         motivo: destino.motivo,
         mercadoria: entrada.mercadoria,
-        boa: (destino.perda ?? 0) > 0 ? (destino.perda ?? 0) : (destino.boa ?? 0),
+        boa: (destino.perda ?? 0) > 0 && !(destino.boa ?? 0) && !(destino.fraca ?? 0) ? (destino.perda ?? 0) : (destino.boa ?? 0),
         fraca: destino.fraca ?? 0,
       })),
   );
@@ -266,7 +266,7 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
     .map((entrada) => ({
       id: entrada.id,
       produtor: entrada.produtor,
-      qtd: capacidadeEntrada(entrada) || null,
+      qtd: entrada.qtd || null,
       mercadoria: entrada.mercadoria,
       preco: entrada.preco,
       destinos: destinosDa(entrada),

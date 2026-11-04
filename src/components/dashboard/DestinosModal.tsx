@@ -1,9 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import type { EntradaLancamento } from "../../types";
-import { capacidadeEntrada, destinosDoDia } from "../../utils/alocacao";
+import { destinosDoDia } from "../../utils/alocacao";
 import { opcoesClassificacao, patchQtd, patchTipo, qtdDestino } from "../../utils/classificacao";
 import { resumoDestinos } from "../../utils/destino";
 import { Autocomplete } from "../ui/Autocomplete";
@@ -23,9 +23,8 @@ interface DestinosModalProps {
 }
 
 export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }: DestinosModalProps) {
-  const { entradas, addDestino, updateDestino, removeDestino, updateEntrada } = usePlanilha();
+  const { entradas, addDestino, updateDestino, removeDestino } = usePlanilha();
   const { clientes } = useData();
-  const [rendimento, setRendimento] = useState<number | null>(null);
 
   const atual = entrada ? entradas.find((e) => e.id === entrada.id) ?? entrada : undefined;
   const destinos = atual ? destinosDoDia(atual, dataDestino) : [];
@@ -38,24 +37,11 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
     return [...nomes].sort();
   }, [clientes, entradas]);
 
-  function fechar() {
-    if (atual) {
-      const todos = atual.destinos ?? [];
-      const total = todos.reduce((s, d) => s + (d.boa ?? 0) + (d.fraca ?? 0) + (d.perda ?? 0), 0);
-      const cap = capacidadeEntrada(atual);
-      if (cap > 0 && total > cap) {
-        setRendimento(total - cap);
-        return;
-      }
-    }
-    onClose();
-  }
-
   return (
     <>
       <Modal
         open={open && !!atual}
-        onClose={fechar}
+        onClose={onClose}
         title="Destinos desta entrega"
         description={
           descricao ??
@@ -93,7 +79,7 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
                             updateDestino(atual.id, destino.id, { cliente, data: dataDestino })
                           }
                           sugestoes={clientesSugestao}
-                          placeholder="Cliente"
+                          placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
                         />
                       </td>
                       <td className="p-1.5">
@@ -144,16 +130,28 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
               </table>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Plus size={15} />}
-              onClick={() => {
-                addDestino(atual.id, { cliente: "", data: dataDestino, tipo: "", boa: null, fraca: null });
-              }}
-            >
-              Adicionar destino
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Plus size={15} />}
+                onClick={() => {
+                  addDestino(atual.id, { cliente: "", data: dataDestino, tipo: "", boa: null, fraca: null, perda: null });
+                }}
+              >
+                Adicionar destino
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Plus size={15} />}
+                onClick={() => {
+                  addDestino(atual.id, { cliente: "", data: dataDestino, tipo: "Perda", boa: null, fraca: null, perda: null });
+                }}
+              >
+                Adicionar perda
+              </Button>
+            </div>
 
             <div className="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3">
               <p className="text-sm text-neutral-500">Total desta entrega</p>
@@ -162,39 +160,16 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
                 return (
                   <p className="text-sm font-semibold text-neutral-700">
                     {r.total}{" "}
-                    <span className="font-normal text-neutral-400">({r.boa} bom · {r.fraca} fraco)</span>
+                    <span className="font-normal text-neutral-400">
+                      ({r.boa} bom · {r.fraca} fraco{r.perda > 0 ? ` · ${r.perda} perda` : ""})
+                    </span>
                   </p>
                 );
               })()}
             </div>
 
             <div className="flex justify-end border-t border-neutral-100 pt-4">
-              <Button onClick={fechar}>Concluído</Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      <Modal open={rendimento !== null} onClose={() => setRendimento(null)} title="Saiu mais do que entrou" size="sm">
-        {rendimento !== null && atual && (
-          <div className="flex flex-col gap-4">
-            <p className="text-sm text-neutral-600">
-              O destino passou {rendimento} cx do que entrou. Rendeu mais?
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" fullWidth onClick={() => setRendimento(null)}>Não</Button>
-              <Button
-                fullWidth
-                onClick={() => {
-                  updateEntrada(atual.id, {
-                    rendimentoExtra: (atual.rendimentoExtra ?? 0) + rendimento,
-                  });
-                  setRendimento(null);
-                  onClose();
-                }}
-              >
-                Sim, rendeu mais
-              </Button>
+              <Button onClick={onClose}>Concluído</Button>
             </div>
           </div>
         )}

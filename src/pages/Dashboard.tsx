@@ -1,13 +1,18 @@
 import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
+import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
+import { DatePicker } from "../components/ui/DatePicker";
 import { usePlanilha } from "../context/PlanilhaContext";
-import type { SaidaLancamento } from "../types";
+import { abrevMercadoria } from "../utils/abrev";
+import { destinosDoDia, restanteEntradaDireto } from "../utils/alocacao";
+import { abrevTipo, nomeTipoCliente, ordemClassificacao, qtdDestino, tipoEhFraco, tipoEhPerda } from "../utils/classificacao";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
 
-type Aba = "folha" | "clientes" | "sobras";
+type Aba = "folha" | "clientes" | "sobras" | "relatorios";
 
 function Stat({
   label,
@@ -33,7 +38,7 @@ function Stat({
 }
 
 export default function Dashboard() {
-  const { dataInicial, entradas, getLinhas, getSaidasDoDia, garantirLinhasDoDia, resumo, sobras } = usePlanilha();
+  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras } = usePlanilha();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
@@ -45,23 +50,106 @@ export default function Dashboard() {
   }, [data]);
 
   const linhasDoDia = getLinhas(data);
-  const saidasDoDia = getSaidasDoDia(data);
   const stats = resumo(data);
   const sobrasPendentes = sobras();
   const totalSobras = sobrasPendentes.reduce((soma, dia) => soma + dia.total, 0);
   const ehHoje = data === dataInicial;
 
-  const saidasPorCliente = useMemo(() => {
-    const mapa = new Map<string, { saidas: SaidaLancamento[]; total: number }>();
-    for (const saida of saidasDoDia.filter((s) => s.tipo === "cliente" && s.cliente && (s.boa || s.fraca))) {
-      const key = saida.cliente as string;
-      const atual = mapa.get(key) ?? { saidas: [], total: 0 };
-      atual.saidas.push(saida);
-      atual.total += (saida.boa || 0) + (saida.fraca || 0);
-      mapa.set(key, atual);
+  const estoqueExibicao = useMemo(() => {
+    const grupos = new Map<string, typeof sobrasPendentes[number]["itens"]>();
+    for (const dia of sobrasPendentes) grupos.set(dia.data, [...dia.itens]);
+
+    for (const entrada of entradas) {
+      if (entrada.data === data) continue;
+      if (destinosDoDia(entrada, data).length === 0) continue;
+      const lista = grupos.get(entrada.data) ?? [];
+      if (lista.some((item) => item.entradaId === entrada.id)) continue;
+      lista.push({
+        entradaId: entrada.id,
+        produtor: entrada.produtor || "Sem fornecedor",
+        mercadoria: entrada.mercadoria,
+        restante: restanteEntradaDireto(entrada),
+        abrev: abrevMercadoria(entrada.mercadoria),
+      });
+      grupos.set(entrada.data, lista);
     }
-    return Array.from(mapa.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [saidasDoDia]);
+
+    return [...grupos.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dia, itens]) => ({
+        data: dia,
+        itens: [...itens].sort(
+          (a, b) => a.produtor.localeCompare(b.produtor, "pt-BR") || a.mercadoria.localeCompare(b.mercadoria, "pt-BR"),
+        ),
+        total: itens.reduce((soma, item) => soma + item.restante, 0),
+      }));
+  }, [sobrasPendentes, entradas, data]);
+
+  const saidasPorCliente = useMemo(() => {
+    type TipoItem = { chave: string; label: string; qtd: number; fraco: boolean };
+    const clientes = new Map<string, Map<string, { mercadoria: string; tipos: Map<string, TipoItem> }>>();
+
+    for (const entrada of entradas) {
+      const mercadoria = entrada.mercadoria || "Mercadoria";
+      for (const destino of destinosDoDia(entrada, data)) {
+        const cliente = destino.cliente.trim();
+        if (!cliente || tipoEhPerda(destino.tipo)) continue;
+
+        const tipo = destino.tipo?.trim() ?? "";
+        const soFraca = !tipo && (destino.fraca ?? 0) > 0 && !(destino.boa ?? 0);
+        const osDois = !tipo && (destino.boa ?? 0) > 0 && (destino.fraca ?? 0) > 0;
+        const porMerc = clientes.get(cliente) ?? new Map();
+        const item = porMerc.get(mercadoria.toLowerCase()) ?? { mercadoria, tipos: new Map<string, TipoItem>() };
+
+        const somar = (chave: string, label: string, qtd: number, fraco: boolean) => {
+          if (qtd <= 0) return;
+          const atual = item.tipos.get(chave) ?? { chave, label, qtd: 0, fraco };
+          atual.qtd += qtd;
+          item.tipos.set(chave, atual);
+        };
+
+        if (osDois) {
+          somar("boa", "", destino.boa ?? 0, false);
+          somar("fraco", "fraco", destino.fraca ?? 0, true);
+        } else {
+          const qtd = qtdDestino(destino) ?? 0;
+          const fraco = tipoEhFraco(tipo) || soFraca;
+          const chave = fraco ? "fraco" : abrevTipo(tipo) || "boa";
+          somar(chave, nomeTipoCliente(tipo, fraco), qtd, fraco);
+        }
+
+        porMerc.set(mercadoria.toLowerCase(), item);
+        clientes.set(cliente, porMerc);
+      }
+    }
+
+    return [...clientes.entries()]
+      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
+      .map(([cliente, porMerc]) => {
+        const itens = [...porMerc.values()]
+          .map((item) => {
+            const tipos = [...item.tipos.values()]
+              .filter((tipo) => tipo.qtd > 0)
+              .sort(
+                (a, b) =>
+                  ordemClassificacao(item.mercadoria, a.chave) - ordemClassificacao(item.mercadoria, b.chave),
+              );
+            return {
+              mercadoria: item.mercadoria,
+              tipos,
+              total: tipos.reduce((soma, tipo) => soma + tipo.qtd, 0),
+            };
+          })
+          .filter((item) => item.total > 0)
+          .sort((a, b) => a.mercadoria.localeCompare(b.mercadoria, "pt-BR"));
+        return {
+          cliente,
+          itens,
+          total: itens.reduce((soma, item) => soma + item.total, 0),
+        };
+      })
+      .filter((grupo) => grupo.itens.length > 0);
+  }, [entradas, data]);
 
   const totalBarra = stats.estoque + stats.recebido;
   const pct = (n: number) => (totalBarra > 0 ? `${(n / totalBarra) * 100}%` : "0%");
@@ -70,6 +158,7 @@ export default function Dashboard() {
     { id: "folha" as Aba, label: "Folha do dia" },
     { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length },
     { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true },
+    { id: "relatorios" as Aba, label: "Relatórios" },
   ];
 
   return (
@@ -92,10 +181,10 @@ export default function Dashboard() {
             <button type="button" onClick={() => setData((d) => addDays(d, -1))} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Dia anterior">
               <ChevronLeft size={20} />
             </button>
-            <div className="min-w-[190px] text-center">
+            <DatePicker value={data} onChange={setData}>
               <p className="text-base font-bold uppercase tracking-wide text-neutral-800">{weekdayLabel(data)}</p>
               <p className="text-xs text-neutral-500">{formatDateLong(data)}</p>
-            </div>
+            </DatePicker>
             <button type="button" onClick={() => setData((d) => addDays(d, 1))} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Próximo dia">
               <ChevronRight size={20} />
             </button>
@@ -131,6 +220,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mx-auto max-w-[1400px] px-6 py-5">
+        {aba !== "relatorios" && (
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
@@ -157,6 +247,7 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+        )}
 
         {aba === "folha" && <PlanilhaDiaria data={data} linhas={linhasDoDia} />}
 
@@ -169,35 +260,48 @@ export default function Dashboard() {
                 <p className="text-xs text-neutral-400">Informe o destino na linha da folha do dia.</p>
               </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-                <table className="w-full border-collapse text-sm">
-                  <thead>
-                    <tr className="bg-neutral-50">
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Cliente</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Mercadoria</th>
-                      <th className="w-24 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-success-600">Boa</th>
-                      <th className="w-24 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-warning-600">Fraca</th>
-                      <th className="w-24 px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {saidasPorCliente.map(([cliente, dados]) => {
-                      const boa = dados.saidas.reduce((s, x) => s + (x.boa || 0), 0);
-                      const fraca = dados.saidas.reduce((s, x) => s + (x.fraca || 0), 0);
-                      return (
-                        <tr key={cliente} className="border-t border-neutral-100">
-                          <td className="px-4 py-3 font-semibold text-neutral-800">{cliente}</td>
-                          <td className="px-4 py-3 text-neutral-500">
-                            {[...new Set(dados.saidas.map((s) => s.mercadoria))].join(", ")}
-                          </td>
-                          <td className="px-4 py-3 text-center font-semibold text-success-600">{boa || "—"}</td>
-                          <td className="px-4 py-3 text-center font-semibold text-warning-600">{fraca || "—"}</td>
-                          <td className="px-4 py-3 text-center font-bold">{dados.total}</td>
+              <div className="flex flex-col gap-5">
+                {saidasPorCliente.map((grupo) => (
+                  <div key={grupo.cliente} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3">
+                      <h3 className="text-sm font-bold text-neutral-800">{grupo.cliente}</h3>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                        {grupo.total} cx
+                      </span>
+                    </div>
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Mercadoria</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Classificação</th>
+                          <th className="w-24 px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">Total</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {grupo.itens.map((item) => (
+                          <tr key={item.mercadoria} className="border-t border-neutral-100">
+                            <td className="px-4 py-3 font-semibold text-neutral-800">{item.mercadoria}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.tipos.map((tipo) => (
+                                  <span
+                                    key={tipo.chave}
+                                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
+                                      tipo.fraco ? "bg-warning-50 text-warning-700" : "bg-success-50 text-success-700"
+                                    }`}
+                                  >
+                                    {tipo.qtd}{tipo.label ? ` ${tipo.label}` : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold">{item.total}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -205,7 +309,7 @@ export default function Dashboard() {
 
         {aba === "sobras" && (
           <div>
-            {sobrasPendentes.length === 0 ? (
+            {estoqueExibicao.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-20 text-center">
                 <CalendarDays size={36} className="text-neutral-300" />
                 <p className="text-sm font-medium text-neutral-500">Nada sobrando no estoque.</p>
@@ -213,7 +317,7 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex flex-col gap-5">
-                {sobrasPendentes.map((dia) => (
+                {estoqueExibicao.map((dia) => (
                   <div key={dia.data}>
                     <div className="mb-2 flex items-center gap-2">
                       <CalendarDays size={14} className="text-brand-600" />
@@ -229,29 +333,42 @@ export default function Dashboard() {
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Fornecedor</th>
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
                             <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase text-warning-600">Sobra</th>
-                            <th className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Destino</th>
+                            <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Destino</th>
+                            <th className="w-28 px-4 py-2.5" />
                           </tr>
                         </thead>
                         <tbody>
-                          {dia.itens.map((item) => (
-                            <tr key={item.entradaId} className="border-t border-neutral-100">
-                              <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
-                              <td className="px-4 py-3">
-                                <p className="font-medium text-neutral-800">{item.mercadoria}</p>
-                                <p className="text-[11px] font-bold tracking-wide text-neutral-400">{item.abrev}</p>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <span className="inline-flex items-center rounded-md border border-dashed border-warning-500/40 bg-warning-50 px-2.5 py-1 text-sm font-bold text-warning-700">
-                                  {item.restante} cx
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <Button size="sm" variant="outline" onClick={() => setDestinoSobraId(item.entradaId)}>
-                                  Destino
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
+                          {dia.itens.map((item) => {
+                            const entrada = entradas.find((e) => e.id === item.entradaId);
+                            const vendidoHoje = entrada ? destinosDoDia(entrada, data) : [];
+                            return (
+                              <tr key={item.entradaId} className="border-t border-neutral-100">
+                                <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
+                                <td className="px-4 py-3">
+                                  <p className="font-medium text-neutral-800">{item.mercadoria}</p>
+                                  <p className="text-[11px] font-bold tracking-wide text-neutral-400">{item.abrev}</p>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <span className="inline-flex items-center rounded-md border border-dashed border-warning-500/40 bg-warning-50 px-2.5 py-1 text-sm font-bold text-warning-700">
+                                    {item.restante} cx
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <DestinoChips destinos={vendidoHoje} />
+                                    {vendidoHoje.length === 0 && (
+                                      <span className="text-xs text-neutral-400">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <Button size="sm" variant="outline" onClick={() => setDestinoSobraId(item.entradaId)}>
+                                    Destino
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -261,6 +378,8 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {aba === "relatorios" && <RelatoriosPainel dia={data} />}
       </div>
 
       <DestinosModal
@@ -271,7 +390,7 @@ export default function Dashboard() {
         descricao={(() => {
           const entrada = entradas.find((e) => e.id === destinoSobraId);
           if (!entrada) return undefined;
-          const item = sobrasPendentes.flatMap((dia) => dia.itens).find((s) => s.entradaId === entrada.id);
+          const item = estoqueExibicao.flatMap((dia) => dia.itens).find((s) => s.entradaId === entrada.id);
           return `${entrada.produtor || "Produtor"} · ${entrada.mercadoria || "Mercadoria"} · sobra ${item?.restante ?? 0} cx`;
         })()}
       />

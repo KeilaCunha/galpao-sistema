@@ -126,3 +126,10 @@ export function calcularSobra(qtd: number | null, resumo: ResumoDestino): number
   const diferenca = qtd - resumo.total;
   return diferenca > 0 ? diferenca : 0;
 }
+
+/** Caixas a mais só do que foi destinado (boa + fraca). Perda não entra no rendimento. */
+export function calcularRendimento(qtd: number | null, resumo: ResumoDestino): number {
+  if (qtd === null) return 0;
+  const destinado = resumo.boa + resumo.fraca;
+  return destinado > qtd ? destinado - qtd : 0;
+}
