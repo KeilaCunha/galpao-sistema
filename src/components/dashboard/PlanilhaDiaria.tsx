@@ -229,12 +229,11 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
 
 function QtdFeitaTomate({ destinos }: { destinos: DestinoEntrada[] }) {
   const feita = resumoFeitaTomate(destinos);
-  const partes = [
-    feita.bom > 0 ? { n: feita.bom } : null,
-    feita.aa > 0 ? { n: feita.aa, sup: "aa" } : null,
-    feita.a > 0 ? { n: feita.a, sup: "a" } : null,
-    feita.fr > 0 ? { n: feita.fr, sup: "fr", aviso: true } : null,
-  ].filter((item): item is { n: number; sup?: string; aviso?: boolean } => item !== null);
+  const partes: { n: number; sup?: string; aviso?: boolean }[] = [];
+  if (feita.bom > 0) partes.push({ n: feita.bom });
+  if (feita.aa > 0) partes.push({ n: feita.aa, sup: "aa" });
+  if (feita.a > 0) partes.push({ n: feita.a, sup: "a" });
+  if (feita.fr > 0) partes.push({ n: feita.fr, sup: "fr", aviso: true });
 
   if (partes.length === 0 && feita.perda === 0) return <span className="text-neutral-300">—</span>;
 
