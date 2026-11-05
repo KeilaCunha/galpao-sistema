@@ -89,6 +89,8 @@ export interface DestinoEntrada {
   tipo?: string;
   /** Data de entrega deste destino (ISO yyyy-mm-dd). Padrão: dia da planilha. */
   data?: string;
+  /** folha = lançado na operação do dia; estoque = vendido pela aba Sobras */
+  origem?: "folha" | "estoque";
   boa: number | null;
   fraca: number | null;
   /** Quantidade perdida (podre, falta de peso...) alocada nesta linha */

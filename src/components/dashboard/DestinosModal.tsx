@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import type { EntradaLancamento } from "../../types";
-import { destinosDoDia } from "../../utils/alocacao";
+import { destinosDaFolhaNoDia, destinosDoEstoqueNoDia } from "../../utils/alocacao";
 import { opcoesClassificacao, patchQtd, patchTipo, qtdDestino } from "../../utils/classificacao";
 import { resumoDestinos } from "../../utils/destino";
 import { Autocomplete } from "../ui/Autocomplete";
@@ -20,14 +20,19 @@ interface DestinosModalProps {
   entrada: EntradaLancamento | undefined;
   dataDestino: string;
   descricao?: string;
+  origemEstoque?: boolean;
 }
 
-export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }: DestinosModalProps) {
+export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, origemEstoque }: DestinosModalProps) {
   const { entradas, addDestino, updateDestino, removeDestino } = usePlanilha();
   const { clientes } = useData();
 
   const atual = entrada ? entradas.find((e) => e.id === entrada.id) ?? entrada : undefined;
-  const destinos = atual ? destinosDoDia(atual, dataDestino) : [];
+  const destinos = atual
+    ? origemEstoque
+      ? destinosDoEstoqueNoDia(atual, dataDestino)
+      : destinosDaFolhaNoDia(atual, dataDestino)
+    : [];
 
   const clientesSugestao = useMemo(() => {
     const nomes = new Set(clientes.map((c) => c.nome));
@@ -136,7 +141,15 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
                 size="sm"
                 icon={<Plus size={15} />}
                 onClick={() => {
-                  addDestino(atual.id, { cliente: "", data: dataDestino, tipo: "", boa: null, fraca: null, perda: null });
+                  addDestino(atual.id, {
+                    cliente: "",
+                    data: dataDestino,
+                    origem: origemEstoque ? "estoque" : "folha",
+                    tipo: "",
+                    boa: null,
+                    fraca: null,
+                    perda: null,
+                  });
                 }}
               >
                 Adicionar destino
@@ -146,7 +159,15 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao }
                 size="sm"
                 icon={<Plus size={15} />}
                 onClick={() => {
-                  addDestino(atual.id, { cliente: "", data: dataDestino, tipo: "Perda", boa: null, fraca: null, perda: null });
+                  addDestino(atual.id, {
+                    cliente: "",
+                    data: dataDestino,
+                    origem: origemEstoque ? "estoque" : "folha",
+                    tipo: "Perda",
+                    boa: null,
+                    fraca: null,
+                    perda: null,
+                  });
                 }}
               >
                 Adicionar perda

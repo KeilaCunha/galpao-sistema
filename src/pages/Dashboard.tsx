@@ -8,7 +8,7 @@ import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
 import { usePlanilha } from "../context/PlanilhaContext";
 import { abrevMercadoria } from "../utils/abrev";
-import { destinosDoDia, restanteEntradaDireto } from "../utils/alocacao";
+import { destinosDoDia, destinosDoEstoqueNoDia, restanteEntradaDireto } from "../utils/alocacao";
 import { abrevTipo, nomeTipoCliente, ordemClassificacao, qtdDestino, tipoEhFraco, tipoEhPerda } from "../utils/classificacao";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
 
@@ -61,7 +61,7 @@ export default function Dashboard() {
 
     for (const entrada of entradas) {
       if (entrada.data === data) continue;
-      if (destinosDoDia(entrada, data).length === 0) continue;
+      if (destinosDoEstoqueNoDia(entrada, data).length === 0) continue;
       const lista = grupos.get(entrada.data) ?? [];
       if (lista.some((item) => item.entradaId === entrada.id)) continue;
       lista.push({
@@ -340,7 +340,7 @@ export default function Dashboard() {
                         <tbody>
                           {dia.itens.map((item) => {
                             const entrada = entradas.find((e) => e.id === item.entradaId);
-                            const vendidoHoje = entrada ? destinosDoDia(entrada, data) : [];
+                            const vendidoHoje = entrada ? destinosDoEstoqueNoDia(entrada, data) : [];
                             return (
                               <tr key={item.entradaId} className="border-t border-neutral-100">
                                 <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
@@ -387,6 +387,7 @@ export default function Dashboard() {
         onClose={() => setDestinoSobraId(null)}
         entrada={entradas.find((e) => e.id === destinoSobraId)}
         dataDestino={data}
+        origemEstoque
         descricao={(() => {
           const entrada = entradas.find((e) => e.id === destinoSobraId);
           if (!entrada) return undefined;

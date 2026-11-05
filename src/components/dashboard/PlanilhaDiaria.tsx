@@ -49,7 +49,9 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
           <tbody>
             {linhas.map((linha) => {
               const resumo = resumoDestinos(linha.destinos);
-              const destinosDia = linha.destinos.filter((destino) => (destino.data || data) === data);
+              const destinosDia = linha.destinos.filter(
+                (destino) => (destino.data || data) === data && destino.origem !== "estoque",
+              );
               const status = statusQtdFeita(linha.qtd, resumo);
               const sobra = calcularSobra(linha.qtd, resumo);
               const rendeu = calcularRendimento(linha.qtd, resumo);

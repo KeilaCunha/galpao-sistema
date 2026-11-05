@@ -213,6 +213,20 @@ export function destinosDoDia(entrada: EntradaLancamento, data: string): Destino
   return destinosDa(entrada).filter((destino) => dataDoDestino(destino, entrada) === data);
 }
 
+export function destinoDaFolha(destino: DestinoEntrada, entrada: EntradaLancamento): boolean {
+  if (destino.origem === "estoque") return false;
+  if (destino.origem === "folha") return true;
+  return dataDoDestino(destino, entrada) === entrada.data;
+}
+
+export function destinosDaFolhaNoDia(entrada: EntradaLancamento, data: string): DestinoEntrada[] {
+  return destinosDoDia(entrada, data).filter((destino) => destinoDaFolha(destino, entrada));
+}
+
+export function destinosDoEstoqueNoDia(entrada: EntradaLancamento, data: string): DestinoEntrada[] {
+  return destinosDoDia(entrada, data).filter((destino) => !destinoDaFolha(destino, entrada));
+}
+
 export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: string): number {
   const destinos = destinosDa(entrada).filter((destino) =>
     ateData ? dataDoDestino(destino, entrada) < ateData : true,
