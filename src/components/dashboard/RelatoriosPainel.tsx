@@ -215,10 +215,19 @@ function PreviewFornecedor({
                   <td className="px-4 py-2.5 text-right tabular-nums text-warning-600">{linha.fraca || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{linha.perda || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
-                    {linha.preco == null ? "—" : formatCurrency(linha.preco)}
+                    {linha.preco == null && linha.precoFraco == null ? (
+                      "—"
+                    ) : (
+                      <span className="flex flex-col items-end leading-tight">
+                        {linha.preco != null && <span>{formatCurrency(linha.preco)}</span>}
+                        {linha.precoFraco != null && (
+                          <span className="text-warning-600">{formatCurrency(linha.precoFraco)}</span>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
-                    {linha.preco == null ? "—" : formatCurrency(linha.valor)}
+                    {linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}
                   </td>
                 </tr>
               ))}

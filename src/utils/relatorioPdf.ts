@@ -110,8 +110,14 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
             <td class="num">${linha.boa}</td>
             <td class="num">${linha.fraca}</td>
             <td class="num">${linha.perda}</td>
-            <td class="num">${linha.preco == null ? "—" : formatCurrency(linha.preco)}</td>
-            <td class="num">${linha.preco == null ? "—" : formatCurrency(linha.valor)}</td>
+            <td class="num">${
+              linha.preco == null && linha.precoFraco == null
+                ? "—"
+                : [linha.preco != null ? formatCurrency(linha.preco) : null, linha.precoFraco != null ? formatCurrency(linha.precoFraco) : null]
+                    .filter(Boolean)
+                    .join("<br>")
+            }</td>
+            <td class="num">${linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}</td>
           </tr>`,
         )
         .join("");

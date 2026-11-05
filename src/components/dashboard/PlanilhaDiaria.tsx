@@ -1,11 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { useData } from "../../context/DataContext";
+import { useState } from "react";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import { ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
 import { calcularRendimento, calcularSobra, resumoDestinos, statusQtdFeita } from "../../utils/destino";
-import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { DestinoChips } from "./DestinoChips";
@@ -21,29 +19,9 @@ interface PlanilhaDiariaProps {
 
 export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
   const { entradas, addEntrada, updateEntrada, removeEntrada } = usePlanilha();
-  const { produtos, fornecedores } = useData();
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [excluirId, setExcluirId] = useState<string | null>(null);
-
-  const produtores = useMemo(() => {
-    const nomes = new Set(fornecedores.map((f) => f.nome));
-    for (const e of entradas) if (e.produtor.trim()) nomes.add(e.produtor);
-    return [...nomes].sort();
-  }, [fornecedores, entradas]);
-
-  const mercadorias = useMemo(() => {
-    const lista: string[] = [];
-    for (const p of produtos.filter((item) => item.situacao === "ativo")) {
-      if (!lista.some((n) => n.toLowerCase() === p.nome.toLowerCase())) lista.push(p.nome);
-    }
-    for (const e of entradas) {
-      if (e.mercadoria && !lista.some((n) => n.toLowerCase() === e.mercadoria.toLowerCase())) {
-        lista.push(e.mercadoria);
-      }
-    }
-    return lista;
-  }, [produtos, entradas]);
 
   const entradaModal = editandoId ? entradas.find((e) => e.id === editandoId) : undefined;
 
@@ -62,7 +40,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
               <th className="w-16 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>
               <th className="min-w-[9.5rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>
               <th className="min-w-[140px] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>
-              <th className="w-20 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
+              <th className="w-28 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
               <th className="border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Destino</th>
               <th className="w-10 border-b border-neutral-200" />
             </tr>
@@ -77,11 +55,10 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
               return (
                 <tr key={linha.id} className="border-b border-neutral-50 last:border-0">
                   <td className="p-1 align-top">
-                    <Autocomplete
-                      compact
+                    <input
+                      className={cellClass}
                       value={linha.produtor}
-                      onChange={(produtor) => updateEntrada(linha.id, { produtor })}
-                      sugestoes={produtores}
+                      onChange={(e) => updateEntrada(linha.id, { produtor: e.target.value })}
                       placeholder="Produtor"
                     />
                   </td>
@@ -135,28 +112,47 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                     )}
                   </td>
                   <td className="p-1 align-top">
-                    <Autocomplete
-                      compact
+                    <input
+                      className={cellClass}
                       value={linha.mercadoria}
-                      onChange={(mercadoria) => updateEntrada(linha.id, { mercadoria })}
-                      sugestoes={mercadorias}
+                      onChange={(e) => updateEntrada(linha.id, { mercadoria: e.target.value })}
                       placeholder="Mercadoria"
                     />
                   </td>
                   <td className="p-1 align-top">
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      className={cellClass}
-                      value={linha.preco ?? ""}
-                      onChange={(e) =>
-                        updateEntrada(linha.id, {
-                          preco: e.target.value === "" ? null : Number(e.target.value),
-                        })
-                      }
-                      placeholder="R$"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        className={cellClass}
+                        value={linha.preco ?? ""}
+                        onChange={(e) =>
+                          updateEntrada(linha.id, {
+                            preco: e.target.value === "" ? null : Number(e.target.value),
+                          })
+                        }
+                        placeholder="R$"
+                      />
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className={`${cellClass} pr-6 text-warning-700`}
+                          value={linha.precoFraco ?? ""}
+                          onChange={(e) =>
+                            updateEntrada(linha.id, {
+                              precoFraco: e.target.value === "" ? null : Number(e.target.value),
+                            })
+                          }
+                          placeholder="R$"
+                        />
+                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold uppercase text-warning-600">
+                          fr
+                        </span>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-1.5 py-1.5 align-top">
                     <div
@@ -199,7 +195,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
           variant="outline"
           size="sm"
           icon={<Plus size={14} />}
-          onClick={() => addEntrada({ data, produtor: "", mercadoria: "", qtd: 0, preco: null, destinos: [] })}
+          onClick={() => addEntrada({ data, produtor: "", mercadoria: "", qtd: 0, preco: null, precoFraco: null, destinos: [] })}
         >
           Adicionar linha
         </Button>

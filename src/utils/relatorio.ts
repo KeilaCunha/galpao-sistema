@@ -38,7 +38,17 @@ export interface LinhaFornecedor {
   fraca: number;
   perda: number;
   preco: number | null;
+  precoFraco: number | null;
   valor: number;
+}
+
+export function valorPagarFornecedor(
+  boa: number,
+  fraca: number,
+  precoBom: number | null | undefined,
+  precoFraco: number | null | undefined,
+): number {
+  return boa * (precoBom ?? 0) + fraca * (precoFraco ?? 0);
 }
 
 export interface GrupoFornecedor {
@@ -166,6 +176,7 @@ export function montarRelatorioFornecedor(
     const produtor = entrada.produtor.trim() || "Sem fornecedor";
     const resultado = resultadoCarga(entrada);
     const preco = entrada.preco;
+    const precoFraco = entrada.precoFraco ?? null;
     const linha: LinhaFornecedor = {
       data: entrada.data,
       mercadoria: entrada.mercadoria,
@@ -174,7 +185,8 @@ export function montarRelatorioFornecedor(
       fraca: resultado.fraca,
       perda: resultado.perda,
       preco,
-      valor: entrada.qtd * (preco ?? 0),
+      precoFraco,
+      valor: valorPagarFornecedor(resultado.boa, resultado.fraca, preco, precoFraco),
     };
     const grupo = grupos.get(produtor) ?? {
       produtor,

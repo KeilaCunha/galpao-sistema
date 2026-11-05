@@ -269,6 +269,7 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
       qtd: entrada.qtd || null,
       mercadoria: entrada.mercadoria,
       preco: entrada.preco,
+      precoFraco: entrada.precoFraco ?? null,
       destinos: destinosDa(entrada),
     }));
 }

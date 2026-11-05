@@ -37,6 +37,7 @@ function criarEntradasVazias(data: string, quantidade: number): EntradaLancament
     mercadoria: "",
     qtd: 0,
     preco: null,
+    precoFraco: null,
     destinos: [],
   }));
 }

@@ -104,7 +104,10 @@ export interface EntradaLancamento {
   produtor: string;
   mercadoria: string;
   qtd: number;
+  /** Preço da caixa boa */
   preco: number | null;
+  /** Preço da caixa fraca */
+  precoFraco?: number | null;
   /** Caixas a mais quando a carga rendeu além do informado */
   rendimentoExtra?: number;
   /** Destinos desta carga — preenchidos na própria linha da operação */
@@ -138,6 +141,7 @@ export interface LinhaPlanilha {
   qtd: number | null;
   mercadoria: string;
   preco: number | null;
+  precoFraco?: number | null;
   destinos: DestinoEntrada[];
   /** Data (ISO) de origem, quando esta linha nasceu automaticamente da sobra de outro dia */
   origemSobraDe?: string;
