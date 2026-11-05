@@ -1,9 +1,10 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import { ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
 import { calcularRendimento, calcularSobra, resumoDestinos, statusQtdFeita } from "../../utils/destino";
+import { formatPreco, parsePreco } from "../../utils/format";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { DestinoChips } from "./DestinoChips";
@@ -40,7 +41,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
               <th className="w-16 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>
               <th className="min-w-[9.5rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>
               <th className="min-w-[140px] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>
-              <th className="w-28 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
+              <th className="w-32 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>
               <th className="border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Destino</th>
               <th className="w-10 border-b border-neutral-200" />
             </tr>
@@ -121,37 +122,15 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   </td>
                   <td className="p-1 align-top">
                     <div className="flex flex-col gap-1">
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        className={cellClass}
-                        value={linha.preco ?? ""}
-                        onChange={(e) =>
-                          updateEntrada(linha.id, {
-                            preco: e.target.value === "" ? null : Number(e.target.value),
-                          })
-                        }
-                        placeholder="R$"
+                      <CampoPreco
+                        value={linha.preco}
+                        onChange={(preco) => updateEntrada(linha.id, { preco })}
                       />
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className={`${cellClass} pr-6 text-warning-700`}
-                          value={linha.precoFraco ?? ""}
-                          onChange={(e) =>
-                            updateEntrada(linha.id, {
-                              precoFraco: e.target.value === "" ? null : Number(e.target.value),
-                            })
-                          }
-                          placeholder="R$"
-                        />
-                        <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-extrabold uppercase text-warning-600">
-                          fr
-                        </span>
-                      </div>
+                      <CampoPreco
+                        value={linha.precoFraco}
+                        onChange={(precoFraco) => updateEntrada(linha.id, { precoFraco })}
+                        fraco
+                      />
                     </div>
                   </td>
                   <td className="px-1.5 py-1.5 align-top">
@@ -220,6 +199,55 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
         onCancel={() => setExcluirId(null)}
       />
     </div>
+  );
+}
+
+function CampoPreco({
+  value,
+  onChange,
+  fraco,
+}: {
+  value: number | null | undefined;
+  onChange: (valor: number | null) => void;
+  fraco?: boolean;
+}) {
+  const [texto, setTexto] = useState(() => formatPreco(value));
+  const [focado, setFocado] = useState(false);
+
+  useEffect(() => {
+    if (!focado) setTexto(formatPreco(value));
+  }, [value, focado]);
+
+  return (
+    <label
+      className={`flex h-9 items-center rounded-md px-1.5 focus-within:bg-brand-50/70 focus-within:ring-2 focus-within:ring-brand-300 ${
+        fraco ? "text-warning-700" : "text-neutral-700"
+      }`}
+    >
+      <span className={`shrink-0 text-sm font-semibold ${fraco ? "text-warning-600" : "text-neutral-500"}`}>R$</span>
+      <input
+        inputMode="decimal"
+        className="h-full w-full bg-transparent px-1 text-sm outline-none placeholder:text-neutral-300"
+        value={texto}
+        onChange={(e) => {
+          const valor = e.target.value;
+          setTexto(valor);
+          if (valor.trim() === "") {
+            onChange(null);
+            return;
+          }
+          const parsed = parsePreco(valor);
+          if (parsed != null) onChange(parsed);
+        }}
+        onFocus={() => setFocado(true)}
+        onBlur={() => {
+          setFocado(false);
+          setTexto(formatPreco(value));
+        }}
+        placeholder="0,00"
+      />
+      {fraco ? <span className="shrink-0 text-[10px] font-extrabold uppercase text-warning-600">fr</span> : null}
+    </label>
   );
 }
 

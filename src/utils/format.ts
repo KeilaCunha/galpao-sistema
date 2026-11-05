@@ -6,6 +6,21 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/** Formata preço para 45,00 */
+export function formatPreco(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "";
+  return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Lê 45, 45,5 ou 1.234,56 e devolve número */
+export function parsePreco(valor: string): number | null {
+  const limpo = valor.trim().replace(/\s/g, "");
+  if (!limpo) return null;
+  const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo;
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
+
 /** Formata uma data ISO (yyyy-mm-dd ou com horário) para DD/MM/AAAA */
 export function formatDate(isoDate: string): string {
   if (!isoDate) return "-";
