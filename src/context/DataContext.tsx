@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api, checarBanco } from "../api/http";
+import { limparPendente, marcarPendente, ouvirSync } from "../api/sync";
 import {
   anotacoesMock,
   classificacoesMock,
@@ -16,7 +18,7 @@ import type {
   Produto,
 } from "../types";
 import { generateId } from "../utils/id";
-import { useLocalStorageState } from "../utils/storage";
+import { loadFromStorage, saveToStorage, useLocalStorageState } from "../utils/storage";
 
 interface DataContextValue {
   fornecedores: Fornecedor[];
@@ -47,22 +49,29 @@ interface DataContextValue {
   removeAnotacao: (id: string) => void;
 }
 
+function cadastroReal<T extends { id: string }>(itens: T[]): T[] {
+  return itens.filter((item) => !/^(forn|prod|cli)-\d+$/.test(item.id));
+}
+
 const DataContext = createContext<DataContextValue | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [fornecedores, setFornecedores] = useLocalStorageState<Fornecedor[]>("fornecedores", fornecedoresMock);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(() =>
+    loadFromStorage("fornecedores", fornecedoresMock),
+  );
+  const [produtos, setProdutos] = useState<Produto[]>(() => loadFromStorage("produtos", produtosMock));
+  const [clientes, setClientes] = useState<Cliente[]>(() => loadFromStorage("clientes", clientesMock));
   const [classificacoes, setClassificacoes] = useLocalStorageState<Classificacao[]>(
     "classificacoes",
     classificacoesMock,
   );
-  const [produtos, setProdutos] = useLocalStorageState<Produto[]>("produtos", produtosMock);
+  const [movimentacoes] = useLocalStorageState<MovimentacaoEstoque[]>("movimentacoes", movimentacoesMock);
+  const [anotacoes, setAnotacoes] = useLocalStorageState<Anotacao[]>("anotacoes", anotacoesMock);
+  const bancoRef = useRef(false);
+  const [usandoBanco, setUsandoBanco] = useState(false);
 
-  // Migração: normaliza tipos que foram salvos como string única com vírgulas
-  // Ex: tipos: ["A , AA , AAA"] → tipos: ["A", "AA", "AAA"]
   useEffect(() => {
-    const precisaNormalizar = produtos.some((p) =>
-      (p.tipos ?? []).some((t) => t.includes(",")),
-    );
+    const precisaNormalizar = produtos.some((p) => (p.tipos ?? []).some((t) => t.includes(",")));
     if (!precisaNormalizar) return;
     setProdutos((prev) =>
       prev.map((p) => ({
@@ -74,9 +83,82 @@ export function DataProvider({ children }: { children: ReactNode }) {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [clientes, setClientes] = useLocalStorageState<Cliente[]>("clientes", clientesMock);
-  const [movimentacoes] = useLocalStorageState<MovimentacaoEstoque[]>("movimentacoes", movimentacoesMock);
-  const [anotacoes, setAnotacoes] = useLocalStorageState<Anotacao[]>("anotacoes", anotacoesMock);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const ok = await checarBanco();
+      if (!ok || cancelado) return;
+      try {
+        const [fornApi, prodApi, cliApi] = await Promise.all([
+          api.get<Fornecedor[]>("/fornecedores"),
+          api.get<Produto[]>("/produtos"),
+          api.get<Cliente[]>("/clientes"),
+        ]);
+        if (cancelado) return;
+        bancoRef.current = true;
+
+        const locaisForn = cadastroReal(loadFromStorage("fornecedores", fornecedoresMock));
+        const locaisProd = cadastroReal(loadFromStorage("produtos", produtosMock));
+        const locaisCli = cadastroReal(loadFromStorage("clientes", clientesMock));
+
+        const forn = fornApi.length > 0 ? fornApi : locaisForn;
+        const prod = prodApi.length > 0 ? prodApi : locaisProd;
+        const cli = cliApi.length > 0 ? cliApi : locaisCli;
+
+        if (fornApi.length === 0) {
+          await Promise.all(forn.map((item) => api.put(`/fornecedores/${item.id}`, item)));
+        }
+        if (prodApi.length === 0) {
+          await Promise.all(prod.map((item) => api.put(`/produtos/${item.id}`, item)));
+        }
+        if (cliApi.length === 0) {
+          await Promise.all(cli.map((item) => api.put(`/clientes/${item.id}`, item)));
+        }
+
+        setFornecedores(forn);
+        setProdutos(prod);
+        setClientes(cli);
+        if (!cancelado) setUsandoBanco(true);
+      } catch {
+        bancoRef.current = false;
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!usandoBanco) return;
+    return ouvirSync((pacote) => {
+      setFornecedores(pacote.fornecedores);
+      setProdutos(pacote.produtos);
+      setClientes(pacote.clientes);
+    });
+  }, [usandoBanco]);
+
+  useEffect(() => {
+    if (!bancoRef.current) saveToStorage("fornecedores", fornecedores);
+  }, [fornecedores]);
+  useEffect(() => {
+    if (!bancoRef.current) saveToStorage("produtos", produtos);
+  }, [produtos]);
+  useEffect(() => {
+    if (!bancoRef.current) saveToStorage("clientes", clientes);
+  }, [clientes]);
+
+  function salvarCadastro(caminho: string, id: string, body: unknown) {
+    if (!bancoRef.current) return;
+    marcarPendente(id);
+    void api.put(`/${caminho}/${id}`, body).finally(() => limparPendente(id));
+  }
+
+  function apagarCadastro(caminho: string, id: string) {
+    if (!bancoRef.current) return;
+    marcarPendente(id);
+    void api.delete(`/${caminho}/${id}`).finally(() => limparPendente(id));
+  }
 
   const value = useMemo<DataContextValue>(
     () => ({
@@ -87,14 +169,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
       movimentacoes,
       anotacoes,
 
-      addFornecedor: (data) =>
-        setFornecedores((prev) => [
-          { ...data, id: generateId("forn"), criadoEm: new Date().toISOString() },
-          ...prev,
-        ]),
-      updateFornecedor: (id, data) =>
-        setFornecedores((prev) => prev.map((f) => (f.id === id ? { ...f, ...data } : f))),
-      removeFornecedor: (id) => setFornecedores((prev) => prev.filter((f) => f.id !== id)),
+      addFornecedor: (data) => {
+        const item: Fornecedor = { ...data, id: generateId("forn"), criadoEm: new Date().toISOString() };
+        setFornecedores((prev) => [item, ...prev]);
+        salvarCadastro("fornecedores", item.id, item);
+      },
+      updateFornecedor: (id, data) => {
+        setFornecedores((prev) => prev.map((f) => (f.id === id ? { ...f, ...data } : f)));
+        const atual = fornecedores.find((f) => f.id === id);
+        salvarCadastro("fornecedores", id, { ...atual, ...data, id });
+      },
+      removeFornecedor: (id) => {
+        setFornecedores((prev) => prev.filter((f) => f.id !== id));
+        apagarCadastro("fornecedores", id);
+      },
 
       addClassificacao: (data) =>
         setClassificacoes((prev) => [{ ...data, id: generateId("cls") }, ...prev]),
@@ -103,20 +191,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
       removeClassificacao: (id) =>
         setClassificacoes((prev) => prev.filter((c) => c.id !== id)),
 
-      addProduto: (data) =>
-        setProdutos((prev) => [{ ...data, id: generateId("prod") }, ...prev]),
-      updateProduto: (id, data) =>
-        setProdutos((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p))),
-      removeProduto: (id) => setProdutos((prev) => prev.filter((p) => p.id !== id)),
+      addProduto: (data) => {
+        const item: Produto = { ...data, id: generateId("prod") };
+        setProdutos((prev) => [item, ...prev]);
+        salvarCadastro("produtos", item.id, item);
+      },
+      updateProduto: (id, data) => {
+        setProdutos((prev) => prev.map((p) => (p.id === id ? { ...p, ...data } : p)));
+        const atual = produtos.find((p) => p.id === id);
+        salvarCadastro("produtos", id, { ...atual, ...data, id });
+      },
+      removeProduto: (id) => {
+        setProdutos((prev) => prev.filter((p) => p.id !== id));
+        apagarCadastro("produtos", id);
+      },
 
-      addCliente: (data) =>
-        setClientes((prev) => [
-          { ...data, id: generateId("cli"), criadoEm: new Date().toISOString() },
-          ...prev,
-        ]),
-      updateCliente: (id, data) =>
-        setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c))),
-      removeCliente: (id) => setClientes((prev) => prev.filter((c) => c.id !== id)),
+      addCliente: (data) => {
+        const item: Cliente = { ...data, id: generateId("cli"), criadoEm: new Date().toISOString() };
+        setClientes((prev) => [item, ...prev]);
+        salvarCadastro("clientes", item.id, item);
+      },
+      updateCliente: (id, data) => {
+        setClientes((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+        const atual = clientes.find((c) => c.id === id);
+        salvarCadastro("clientes", id, { ...atual, ...data, id });
+      },
+      removeCliente: (id) => {
+        setClientes((prev) => prev.filter((c) => c.id !== id));
+        apagarCadastro("clientes", id);
+      },
 
       addAnotacao: (data) =>
         setAnotacoes((prev) => [

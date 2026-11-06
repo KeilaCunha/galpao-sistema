@@ -38,7 +38,7 @@ function Stat({
 }
 
 export default function Dashboard() {
-  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras } = usePlanilha();
+  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras, usandoBanco } = usePlanilha();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
@@ -193,6 +193,14 @@ export default function Dashboard() {
                 Hoje
               </button>
             )}
+            <span
+              className={`ml-2 hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${
+                usandoBanco ? "bg-success-50 text-success-600" : "bg-warning-50 text-warning-600"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${usandoBanco ? "bg-success-500" : "bg-warning-500"}`} />
+              {usandoBanco ? "Banco ao vivo" : "Só neste computador"}
+            </span>
           </div>
         </div>
       </header>

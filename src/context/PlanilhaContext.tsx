@@ -1,4 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api, checarBanco } from "../api/http";
+import { idsPendentes, limparPendente, marcarPendente, ouvirSync, registrarVersao } from "../api/sync";
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import {
   migrarSaidasParaDestinos,
@@ -9,11 +11,12 @@ import {
 } from "../utils/alocacao";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
-import { loadFromStorage, useLocalStorageState } from "../utils/storage";
+import { loadFromStorage, saveToStorage } from "../utils/storage";
 
 interface PlanilhaContextValue {
   entradas: EntradaLancamento[];
   dataInicial: string;
+  usandoBanco: boolean;
   getLinhas: (data: string) => LinhaPlanilha[];
   getSaidasDoDia: (data: string) => SaidaLancamento[];
   addEntrada: (dados: Omit<EntradaLancamento, "id">) => string;
@@ -55,13 +58,100 @@ function estadoInicialEntradas(): EntradaLancamento[] {
   return criarEntradasVazias(toISODate(), LINHAS_PADRAO);
 }
 
+function entradaPersistivel(entrada: EntradaLancamento): boolean {
+  return Boolean(
+    entrada.produtor.trim() ||
+      entrada.mercadoria.trim() ||
+      entrada.qtd > 0 ||
+      (entrada.preco != null && entrada.preco > 0) ||
+      (entrada.precoFraco != null && entrada.precoFraco > 0) ||
+      (entrada.destinos?.length ?? 0) > 0,
+  );
+}
+
+function mesclarEntradas(
+  local: EntradaLancamento[],
+  remoto: EntradaLancamento[],
+  pendentes: Set<string>,
+): EntradaLancamento[] {
+  const porId = new Map(remoto.map((entrada) => [entrada.id, entrada]));
+  for (const id of pendentes) {
+    const localEntrada = local.find((entrada) => entrada.id === id);
+    if (localEntrada) porId.set(id, localEntrada);
+  }
+  const vazias = local.filter((entrada) => !entradaPersistivel(entrada) && !porId.has(entrada.id));
+  return [...porId.values(), ...vazias];
+}
+
 const PlanilhaContext = createContext<PlanilhaContextValue | undefined>(undefined);
 
 export function PlanilhaProvider({ children }: { children: ReactNode }) {
-  const [entradas, setEntradas] = useLocalStorageState<EntradaLancamento[]>(
-    "lancamentos-entradas-v5",
-    estadoInicialEntradas,
-  );
+  const [entradas, setEntradas] = useState<EntradaLancamento[]>(estadoInicialEntradas);
+  const [usandoBanco, setUsandoBanco] = useState(false);
+  const timers = useRef(new Map<string, number>());
+  const bancoRef = useRef(false);
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      const ok = await checarBanco();
+      if (cancelado) return;
+      if (!ok) {
+        bancoRef.current = false;
+        setUsandoBanco(false);
+        return;
+      }
+      try {
+        const dados = await api.get<{ versao: number; entradas: EntradaLancamento[] }>("/sync");
+        if (cancelado) return;
+        bancoRef.current = true;
+        registrarVersao(dados.versao);
+        const doBanco = dados.entradas ?? [];
+        const locais = estadoInicialEntradas().filter(entradaPersistivel);
+        if (doBanco.length === 0 && locais.length > 0) {
+          await Promise.all(locais.map((entrada) => api.put(`/entradas/${entrada.id}`, entrada)));
+          if (!cancelado) setEntradas(locais);
+        } else {
+          setEntradas(doBanco);
+        }
+        if (!cancelado) setUsandoBanco(true);
+      } catch {
+        bancoRef.current = false;
+        setUsandoBanco(false);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!usandoBanco) return;
+    return ouvirSync((pacote) => {
+      setEntradas((local) => mesclarEntradas(local, pacote.entradas, idsPendentes()));
+    });
+  }, [usandoBanco]);
+
+  useEffect(() => {
+    if (!usandoBanco) saveToStorage("lancamentos-entradas-v5", entradas);
+  }, [entradas, usandoBanco]);
+
+  function agendarSalvar(entrada: EntradaLancamento) {
+    if (!bancoRef.current) return;
+    marcarPendente(entrada.id);
+    const atual = timers.current.get(entrada.id);
+    if (atual) window.clearTimeout(atual);
+    if (!entradaPersistivel(entrada)) {
+      void api.delete(`/entradas/${entrada.id}`).finally(() => limparPendente(entrada.id));
+      return;
+    }
+    timers.current.set(
+      entrada.id,
+      window.setTimeout(() => {
+        void api.put(`/entradas/${entrada.id}`, entrada).finally(() => limparPendente(entrada.id));
+      }, 300),
+    );
+  }
 
   const saidas = useMemo(() => saidasDerivadas(entradas), [entradas]);
 
@@ -69,29 +159,50 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     () => ({
       entradas,
       dataInicial: toISODate(),
+      usandoBanco,
       getLinhas: (data) => montarLinhas(entradas, data),
       getSaidasDoDia: (data) => saidas.filter((saida) => saida.data === data),
       addEntrada: (dados) => {
         const id = generateId("ent");
-        setEntradas((prev) => [...prev, { destinos: [], ...dados, id }]);
+        const entrada: EntradaLancamento = { destinos: [], ...dados, id };
+        setEntradas((prev) => [...prev, entrada]);
+        agendarSalvar(entrada);
         return id;
       },
       updateEntrada: (id, patch) => {
-        setEntradas((prev) => prev.map((entrada) => (entrada.id === id ? { ...entrada, ...patch } : entrada)));
+        setEntradas((prev) => {
+          const proxima = prev.map((entrada) => (entrada.id === id ? { ...entrada, ...patch } : entrada));
+          const atualizada = proxima.find((entrada) => entrada.id === id);
+          if (atualizada) agendarSalvar(atualizada);
+          return proxima;
+        });
       },
-      removeEntrada: (id) => setEntradas((prev) => prev.filter((entrada) => entrada.id !== id)),
+      removeEntrada: (id) => {
+        const timer = timers.current.get(id);
+        if (timer) window.clearTimeout(timer);
+        timers.current.delete(id);
+        setEntradas((prev) => prev.filter((entrada) => entrada.id !== id));
+        if (bancoRef.current) {
+          marcarPendente(id);
+          void api.delete(`/entradas/${id}`).finally(() => limparPendente(id));
+        }
+      },
       addDestino: (entradaId, destino) => {
-        setEntradas((prev) =>
-          prev.map((entrada) =>
+        const novo = { ...destino, id: generateId("dest") };
+        setEntradas((prev) => {
+          const proxima = prev.map((entrada) =>
             entrada.id === entradaId
-              ? { ...entrada, destinos: [...(entrada.destinos ?? []), { ...destino, id: generateId("dest") }] }
+              ? { ...entrada, destinos: [...(entrada.destinos ?? []), novo] }
               : entrada,
-          ),
-        );
+          );
+          const atualizada = proxima.find((entrada) => entrada.id === entradaId);
+          if (atualizada) agendarSalvar(atualizada);
+          return proxima;
+        });
       },
       updateDestino: (entradaId, destinoId, patch) => {
-        setEntradas((prev) =>
-          prev.map((entrada) =>
+        setEntradas((prev) => {
+          const proxima = prev.map((entrada) =>
             entrada.id === entradaId
               ? {
                   ...entrada,
@@ -100,17 +211,23 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
                   ),
                 }
               : entrada,
-          ),
-        );
+          );
+          const atualizada = proxima.find((entrada) => entrada.id === entradaId);
+          if (atualizada) agendarSalvar(atualizada);
+          return proxima;
+        });
       },
       removeDestino: (entradaId, destinoId) => {
-        setEntradas((prev) =>
-          prev.map((entrada) =>
+        setEntradas((prev) => {
+          const proxima = prev.map((entrada) =>
             entrada.id === entradaId
               ? { ...entrada, destinos: (entrada.destinos ?? []).filter((destino) => destino.id !== destinoId) }
               : entrada,
-          ),
-        );
+          );
+          const atualizada = proxima.find((entrada) => entrada.id === entradaId);
+          if (atualizada) agendarSalvar(atualizada);
+          return proxima;
+        });
       },
       garantirLinhasDoDia: (data, minimo = LINHAS_PADRAO) => {
         setEntradas((prev) => {
@@ -122,7 +239,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       resumo: (data) => resumoDoDia(entradas, data),
       sobras: () => sobrasPorDia(entradas),
     }),
-    [entradas, saidas],
+    [entradas, saidas, usandoBanco],
   );
 
   return <PlanilhaContext.Provider value={value}>{children}</PlanilhaContext.Provider>;

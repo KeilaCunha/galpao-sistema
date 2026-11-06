@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatDate, toISODate } from "../../utils/format";
 
@@ -89,6 +89,10 @@ export function DatePicker({
     setVisao({ ano: proxima.getFullYear(), mes: proxima.getMonth(), dia: 1 });
   }
 
+  function mudarAno(delta: number) {
+    setVisao((atual) => ({ ...atual, ano: atual.ano + delta }));
+  }
+
   return (
     <div ref={caixa} className="relative">
       {label && (
@@ -132,25 +136,45 @@ export function DatePicker({
       {aberto && (
         <div className={`absolute z-30 mt-2 w-[17.5rem] rounded-2xl border border-neutral-200 bg-white p-3 shadow-xl ${children ? "left-1/2 -translate-x-1/2" : "left-0"}`}>
           <div className="mb-2 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => mudarMes(-1)}
-              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-              aria-label="Mês anterior"
-            >
-              <ChevronLeft size={18} />
-            </button>
+            <div className="flex">
+              <button
+                type="button"
+                onClick={() => mudarAno(-1)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                aria-label="Ano anterior"
+              >
+                <ChevronsLeft size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => mudarMes(-1)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft size={18} />
+              </button>
+            </div>
             <p className="text-sm font-semibold capitalize text-neutral-800">
               {MESES[visao.mes]} {visao.ano}
             </p>
-            <button
-              type="button"
-              onClick={() => mudarMes(1)}
-              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-              aria-label="Próximo mês"
-            >
-              <ChevronRight size={18} />
-            </button>
+            <div className="flex">
+              <button
+                type="button"
+                onClick={() => mudarMes(1)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                aria-label="Próximo mês"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <button
+                type="button"
+                onClick={() => mudarAno(1)}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                aria-label="Próximo ano"
+              >
+                <ChevronsRight size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-semibold text-neutral-400">

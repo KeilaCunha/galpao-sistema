@@ -1,8 +1,10 @@
-import { FileDown } from "lucide-react";
+import { FileDown, HardDriveDownload } from "lucide-react";
 import { useMemo, useState } from "react";
+import { baixarBackup } from "../../api/http";
 import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
-import { formatCurrency, formatDate } from "../../utils/format";
+import { useToast } from "../../context/ToastContext";
+import { formatCurrency, formatDate, toISODate } from "../../utils/format";
 import { montarRelatorioFornecedor, montarRelatorioOperacao } from "../../utils/relatorio";
 import { imprimirRelatorioFornecedor, imprimirRelatorioOperacao } from "../../utils/relatorioPdf";
 import { Button } from "../ui/Button";
@@ -14,8 +16,10 @@ const inputClass =
   "h-10 w-[8.5rem] rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100";
 
 export function RelatoriosPainel({ dia }: { dia: string }) {
-  const { entradas } = usePlanilha();
-  const { fornecedores } = useData();
+  const { entradas, usandoBanco } = usePlanilha();
+  const { fornecedores, produtos, clientes } = useData();
+  const { showSuccess, showError } = useToast();
+  const [baixando, setBaixando] = useState(false);
   const [tipo, setTipo] = useState<TipoRelatorio>("operacao");
   const [de, setDe] = useState(dia);
   const [ate, setAte] = useState(dia);
@@ -103,9 +107,61 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
           >
             Gerar PDF
           </Button>
+          <Button
+            variant="outline"
+            icon={<HardDriveDownload size={16} />}
+            disabled={baixando}
+            onClick={() => {
+              void (async () => {
+                setBaixando(true);
+                const nome = `galpao-backup-${toISODate()}.json`;
+                try {
+                  if (usandoBanco) {
+                    await baixarBackup(nome);
+                  } else {
+                    const blob = new Blob(
+                      [
+                        JSON.stringify(
+                          {
+                            geradoEm: new Date().toISOString(),
+                            entradas: entradas.filter(
+                              (entrada) =>
+                                entrada.produtor.trim() ||
+                                entrada.mercadoria.trim() ||
+                                entrada.qtd ||
+                                (entrada.destinos?.length ?? 0) > 0,
+                            ),
+                            fornecedores,
+                            produtos,
+                            clientes,
+                          },
+                          null,
+                          2,
+                        ),
+                      ],
+                      { type: "application/json" },
+                    );
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(blob);
+                    link.download = nome;
+                    link.click();
+                    URL.revokeObjectURL(link.href);
+                  }
+                  showSuccess("Cópia de segurança baixada. Guarde no OneDrive.");
+                } catch {
+                  showError("Não foi possível baixar a cópia de segurança.");
+                } finally {
+                  setBaixando(false);
+                }
+              })();
+            }}
+          >
+            {baixando ? "Baixando…" : "Baixar backup"}
+          </Button>
         </div>
         <p className="mt-3 text-xs text-neutral-400">
-          Digite a data ou clique no calendário. Se for pagar alguém, selecione o fornecedor.
+          Digite a data ou use as setas duplas do calendário para voltar um ano. Se for pagar alguém, selecione o
+          fornecedor. O backup guarda a folha inteira para reabrir depois.
         </p>
       </div>
 

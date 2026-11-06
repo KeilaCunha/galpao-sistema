@@ -1,10 +1,12 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import { ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
 import { calcularRendimento, calcularSobra, resumoDestinos, statusQtdFeita } from "../../utils/destino";
 import { formatPreco, parsePreco } from "../../utils/format";
+import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { DestinoChips } from "./DestinoChips";
@@ -20,9 +22,25 @@ interface PlanilhaDiariaProps {
 
 export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
   const { entradas, addEntrada, updateEntrada, removeEntrada } = usePlanilha();
+  const { produtos, fornecedores } = useData();
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [excluirId, setExcluirId] = useState<string | null>(null);
+
+  const produtores = useMemo(() => {
+    const nomes = new Set(fornecedores.map((f) => f.nome.trim()).filter(Boolean));
+    for (const e of entradas) if (e.produtor.trim()) nomes.add(e.produtor.trim());
+    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [fornecedores, entradas]);
+
+  const mercadorias = useMemo(() => {
+    const nomes = new Set<string>();
+    for (const p of produtos.filter((item) => item.situacao === "ativo")) {
+      if (p.nome.trim()) nomes.add(p.nome.trim());
+    }
+    for (const e of entradas) if (e.mercadoria.trim()) nomes.add(e.mercadoria.trim());
+    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [produtos, entradas]);
 
   const entradaModal = editandoId ? entradas.find((e) => e.id === editandoId) : undefined;
 
@@ -58,10 +76,11 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
               return (
                 <tr key={linha.id} className="border-b border-neutral-50 last:border-0">
                   <td className="p-1 align-top">
-                    <input
-                      className={cellClass}
+                    <Autocomplete
+                      compact
                       value={linha.produtor}
-                      onChange={(e) => updateEntrada(linha.id, { produtor: e.target.value })}
+                      onChange={(produtor) => updateEntrada(linha.id, { produtor })}
+                      sugestoes={produtores}
                       placeholder="Produtor"
                     />
                   </td>
@@ -115,10 +134,11 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                     )}
                   </td>
                   <td className="p-1 align-top">
-                    <input
-                      className={cellClass}
+                    <Autocomplete
+                      compact
                       value={linha.mercadoria}
-                      onChange={(e) => updateEntrada(linha.id, { mercadoria: e.target.value })}
+                      onChange={(mercadoria) => updateEntrada(linha.id, { mercadoria })}
+                      sugestoes={mercadorias}
                       placeholder="Mercadoria"
                     />
                   </td>

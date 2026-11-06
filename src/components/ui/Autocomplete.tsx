@@ -31,9 +31,10 @@ export function Autocomplete({
   const [aberto, setAberto] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const filtradas = value.trim()
-    ? sugestoes.filter((item) => item.toLowerCase().includes(value.toLowerCase())).slice(0, 10)
-    : sugestoes.slice(0, 10);
+  const termo = value.trim().toLowerCase();
+  const filtradas = termo
+    ? sugestoes.filter((item) => item.toLowerCase().includes(termo)).slice(0, 10)
+    : [];
 
   const campo = (
     <div className="relative">
@@ -50,7 +51,9 @@ export function Autocomplete({
           onChange(e.target.value);
           setAberto(true);
         }}
-        onFocus={() => setAberto(true)}
+        onFocus={() => {
+          if (value.trim()) setAberto(true);
+        }}
         onBlur={() => setTimeout(() => setAberto(false), 150)}
         placeholder={placeholder}
         disabled={disabled}
