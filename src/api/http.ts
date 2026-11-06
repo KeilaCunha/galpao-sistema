@@ -58,7 +58,9 @@ export function consumirLiberacao(entradaId: string) {
 function mensagemErro(texto: string, status: number): string {
   const limpo = (texto ?? "").trim();
   if (/<!DOCTYPE html>/i.test(limpo) || /<html[\s>]/i.test(limpo) || /Cannot (GET|POST|PUT|DELETE)/i.test(limpo)) {
-    return "Ainda não dá para gravar pessoas neste computador. O cadastro no banco só funciona com o selo verde (Banco ao vivo). No site isso entra depois do SUBA.";
+    return apiRemota
+      ? "O servidor do banco ainda está atualizando. Espere um minuto e tente entrar de novo."
+      : "Ainda não dá para gravar pessoas neste computador. O cadastro no banco só funciona com o selo verde (Banco ao vivo).";
   }
   try {
     const json = JSON.parse(limpo) as { erro?: string };
