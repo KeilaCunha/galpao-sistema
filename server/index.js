@@ -138,6 +138,21 @@ function mapEntrada(row, destinos = []) {
   };
 }
 
+function mapPedido(row) {
+  return {
+    id: row.id,
+    data: isoData(row.data),
+    cliente: row.cliente || "",
+    mercadoria: row.mercadoria || "",
+    tipo: row.tipo || "BOM",
+    qtd: Number(row.qtd) || 0,
+  };
+}
+
+function pedidoPreenchido(pedido) {
+  return Boolean(pedido?.cliente?.trim() && pedido?.mercadoria?.trim() && Number(pedido?.qtd) > 0);
+}
+
 function permissoesDoPedido(papel, body, atuais) {
   const origem = body?.permissoes ?? atuais ?? {};
   return mesclarPermissoes(papel, {
@@ -190,11 +205,12 @@ async function carregarEntradas() {
 }
 
 async function montarPacote() {
-  const [entradas, fornecedores, produtos, clientes] = await Promise.all([
+  const [entradas, fornecedores, produtos, clientes, pedidos] = await Promise.all([
     carregarEntradas(),
     query("SELECT * FROM fornecedores ORDER BY nome"),
     query("SELECT * FROM produtos ORDER BY nome"),
     query("SELECT * FROM clientes ORDER BY nome"),
+    query("SELECT * FROM pedidos ORDER BY data, criado_em, id"),
   ]);
   return {
     geradoEm: new Date().toISOString(),
@@ -202,6 +218,7 @@ async function montarPacote() {
     fornecedores: fornecedores.rows.map(mapFornecedor),
     produtos: produtos.rows.map(mapProduto),
     clientes: clientes.rows.map(mapCliente),
+    pedidos: pedidos.rows.filter(pedidoPreenchido).map(mapPedido),
   };
 }
 
@@ -428,12 +445,13 @@ app.get("/api/versao", ...autenticado, wrap(async (_req, res) => {
 }));
 
 app.get("/api/sync", ...autenticado, wrap(async (req, res) => {
-  const [meta, entradas, fornecedores, produtos, clientes] = await Promise.all([
+  const [meta, entradas, fornecedores, produtos, clientes, pedidos] = await Promise.all([
     query("SELECT versao FROM sync_meta WHERE id = 1"),
     carregarEntradas(),
     query("SELECT * FROM fornecedores ORDER BY nome"),
     query("SELECT * FROM produtos ORDER BY nome"),
     query("SELECT * FROM clientes ORDER BY nome"),
+    query("SELECT * FROM pedidos ORDER BY data, criado_em, id"),
   ]);
   res.json({
     versao: Number(meta.rows[0]?.versao ?? 0),
@@ -441,6 +459,7 @@ app.get("/api/sync", ...autenticado, wrap(async (req, res) => {
     fornecedores: fornecedores.rows.map(mapFornecedor),
     produtos: produtos.rows.map(mapProduto),
     clientes: clientes.rows.map(mapCliente),
+    pedidos: pedidos.rows.filter(pedidoPreenchido).map(mapPedido),
   });
   void garantirBackupDoDia();
 }));
@@ -605,6 +624,60 @@ app.delete("/api/entradas/:id", ...autenticado, wrap(async (req, res) => {
       acao: "apagar_entrada",
       alvo: req.params.id,
       detalhe: { produtor: antiga?.produtor, mercadoria: antiga?.mercadoria, qtd: antiga?.qtd },
+    });
+  }
+  res.json({ ok: true });
+}));
+
+app.put("/api/pedidos/:id", ...autenticado, exigirPermissao("porCliente"), wrap(async (req, res) => {
+  const { id } = req.params;
+  const body = req.body ?? {};
+  const pedido = {
+    id,
+    data: isoData(body.data),
+    cliente: String(body.cliente ?? "").trim(),
+    mercadoria: String(body.mercadoria ?? "").trim(),
+    tipo: String(body.tipo ?? "BOM").trim() || "BOM",
+    qtd: Number(body.qtd) || 0,
+  };
+  if (!pedidoPreenchido(pedido) || !pedido.data) {
+    await query("DELETE FROM pedidos WHERE id = $1", [id]);
+    await tocarVersao();
+    res.json({ ok: true, id, apagado: true });
+    return;
+  }
+  await query(
+    `INSERT INTO pedidos (id, data, cliente, mercadoria, tipo, qtd)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO UPDATE SET
+       data = EXCLUDED.data,
+       cliente = EXCLUDED.cliente,
+       mercadoria = EXCLUDED.mercadoria,
+       tipo = EXCLUDED.tipo,
+       qtd = EXCLUDED.qtd`,
+    [pedido.id, pedido.data, pedido.cliente, pedido.mercadoria, pedido.tipo, pedido.qtd],
+  );
+  await tocarVersao();
+  if (req.usuario) {
+    await gravarAuditoria({
+      usuario: req.usuario,
+      acao: "salvar_pedido",
+      alvo: id,
+      detalhe: { cliente: pedido.cliente, mercadoria: pedido.mercadoria, tipo: pedido.tipo, qtd: pedido.qtd },
+    });
+  }
+  res.json({ ok: true, id });
+}));
+
+app.delete("/api/pedidos/:id", ...autenticado, exigirPermissao("porCliente"), wrap(async (req, res) => {
+  const { id } = req.params;
+  await query("DELETE FROM pedidos WHERE id = $1", [id]);
+  await tocarVersao();
+  if (req.usuario) {
+    await gravarAuditoria({
+      usuario: req.usuario,
+      acao: "apagar_pedido",
+      alvo: id,
     });
   }
   res.json({ ok: true });

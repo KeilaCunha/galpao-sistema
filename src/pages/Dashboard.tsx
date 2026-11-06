@@ -1,9 +1,10 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Settings, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Plus, Settings, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { SessaoTopo } from "../components/auth/SessaoTopo";
 import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
+import { PedidoModal } from "../components/dashboard/PedidoModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
 import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
@@ -13,15 +14,14 @@ import { usePlanilha } from "../context/PlanilhaContext";
 import { abrevMercadoria } from "../utils/abrev";
 import {
   compararLancamento,
-  destinosDoDia,
   destinosDoEstoqueNoDia,
   fracaEmEstoque,
   ordemDeLancamento,
   restanteEntradaDireto,
 } from "../utils/alocacao";
 import { destinoPersistivel } from "../utils/destino";
-import { abrevTipo, nomeTipoCliente, ordemClassificacao, qtdDestino, tipoEhEstoque, tipoEhFraco, tipoEhPerda } from "../utils/classificacao";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
+import { montarPorCliente, type ChipCliente } from "../utils/pedido";
 
 type Aba = "folha" | "clientes" | "sobras" | "relatorios";
 
@@ -50,13 +50,55 @@ function Stat({
   );
 }
 
+function ChipLinha({
+  chip,
+  onRemove,
+}: {
+  chip: ChipCliente;
+  onRemove?: () => void;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${
+        chip.fraco ? "bg-warning-50 text-warning-700" : "bg-success-50 text-success-700"
+      }`}
+    >
+      {chip.qtd}
+      {chip.label ? ` ${chip.label}` : ""}
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ml-0.5 rounded-sm text-neutral-400 hover:text-danger-500"
+          aria-label="Remover pedido"
+        >
+          <X size={10} strokeWidth={2.5} />
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
 export default function Dashboard() {
-  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras, statusBanco } = usePlanilha();
+  const {
+    dataInicial,
+    entradas,
+    pedidos,
+    addPedido,
+    removePedido,
+    getLinhas,
+    garantirLinhasDoDia,
+    resumo,
+    sobras,
+    statusBanco,
+  } = usePlanilha();
   const { pode, precisaSetup } = useAuth();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
   const [destinoSobraId, setDestinoSobraId] = useState<string | null>(null);
+  const [pedidoAberto, setPedidoAberto] = useState(false);
+  const [pedidoCliente, setPedidoCliente] = useState("");
 
   useEffect(() => {
     garantirLinhasDoDia(data);
@@ -102,71 +144,7 @@ export default function Dashboard() {
       });
   }, [sobrasPendentes, entradas, data]);
 
-  const saidasPorCliente = useMemo(() => {
-    type TipoItem = { chave: string; label: string; qtd: number; fraco: boolean };
-    const clientes = new Map<string, Map<string, { mercadoria: string; tipos: Map<string, TipoItem> }>>();
-
-    for (const entrada of entradas) {
-      const mercadoria = entrada.mercadoria || "Mercadoria";
-      for (const destino of destinosDoDia(entrada, data)) {
-        const cliente = destino.cliente.trim();
-        if (!cliente || tipoEhPerda(destino.tipo) || tipoEhEstoque(destino.tipo)) continue;
-
-        const tipo = destino.tipo?.trim() ?? "";
-        const soFraca = !tipo && (destino.fraca ?? 0) > 0 && !(destino.boa ?? 0);
-        const osDois = !tipo && (destino.boa ?? 0) > 0 && (destino.fraca ?? 0) > 0;
-        const porMerc = clientes.get(cliente) ?? new Map();
-        const item = porMerc.get(mercadoria.toLowerCase()) ?? { mercadoria, tipos: new Map<string, TipoItem>() };
-
-        const somar = (chave: string, label: string, qtd: number, fraco: boolean) => {
-          if (qtd <= 0) return;
-          const atual = item.tipos.get(chave) ?? { chave, label, qtd: 0, fraco };
-          atual.qtd += qtd;
-          item.tipos.set(chave, atual);
-        };
-
-        if (osDois) {
-          somar("boa", "", destino.boa ?? 0, false);
-          somar("fraco", "fraco", destino.fraca ?? 0, true);
-        } else {
-          const qtd = qtdDestino(destino) ?? 0;
-          const fraco = tipoEhFraco(tipo) || soFraca;
-          const chave = fraco ? "fraco" : abrevTipo(tipo) || "boa";
-          somar(chave, nomeTipoCliente(tipo, fraco), qtd, fraco);
-        }
-
-        porMerc.set(mercadoria.toLowerCase(), item);
-        clientes.set(cliente, porMerc);
-      }
-    }
-
-    return [...clientes.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, "pt-BR"))
-      .map(([cliente, porMerc]) => {
-        const itens = [...porMerc.values()]
-          .map((item) => {
-            const tipos = [...item.tipos.values()]
-              .filter((tipo) => tipo.qtd > 0)
-              .sort(
-                (a, b) =>
-                  ordemClassificacao(item.mercadoria, a.chave) - ordemClassificacao(item.mercadoria, b.chave),
-              );
-            return {
-              mercadoria: item.mercadoria,
-              tipos,
-              total: tipos.reduce((soma, tipo) => soma + tipo.qtd, 0),
-            };
-          })
-          .filter((item) => item.total > 0)
-          .sort((a, b) => a.mercadoria.localeCompare(b.mercadoria, "pt-BR"));
-        return {
-          cliente,
-          itens,
-          total: itens.reduce((soma, item) => soma + item.total, 0),
-        };
-      })
-      .filter((grupo) => grupo.itens.length > 0);
-  }, [entradas, data]);
+  const saidasPorCliente = useMemo(() => montarPorCliente(entradas, pedidos, data), [entradas, pedidos, data]);
 
   const totalBarra = stats.estoque + stats.recebido;
   const pct = (n: number) => (totalBarra > 0 ? `${(n / totalBarra) * 100}%` : "0%");
@@ -337,27 +315,58 @@ export default function Dashboard() {
         {aba === "clientes" && (
           <div>
             {saidasPorCliente.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-20 text-center">
+              <div className="flex flex-col items-center gap-3 py-16 text-center">
                 <Users size={36} className="text-neutral-300" />
                 <p className="text-sm font-medium text-neutral-500">Nenhum cliente neste dia.</p>
-                <p className="text-xs text-neutral-400">Informe o destino na linha da folha do dia.</p>
+                <p className="text-xs text-neutral-400">
+                  Informe o destino na folha do dia. Depois, em cada cliente, adicione o pedido dele.
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-5">
                 {saidasPorCliente.map((grupo) => (
                   <div key={grupo.cliente} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
-                    <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-3">
                       <h3 className="text-sm font-bold text-neutral-800">{grupo.cliente}</h3>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                        {grupo.total} cx
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
+                          {grupo.totalFeito} cx
+                        </span>
+                        <Button
+                          size="sm"
+                          icon={<Plus size={14} />}
+                          onClick={() => {
+                            setPedidoCliente(grupo.cliente);
+                            setPedidoAberto(true);
+                          }}
+                        >
+                          Adicionar pedido
+                        </Button>
+                      </div>
                     </div>
-                    <table className="w-full border-collapse text-sm">
+                    <table className="w-full border-collapse text-sm" translate="no">
                       <thead>
                         <tr>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Mercadoria</th>
-                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">Classificação</th>
-                          <th className="w-24 px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">Total</th>
+                          <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                            Mercadoria
+                          </th>
+                          <th
+                            lang="pt-BR"
+                            translate="no"
+                            className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500"
+                          >
+                            Classificação
+                          </th>
+                          <th
+                            lang="pt-BR"
+                            translate="no"
+                            className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500"
+                          >
+                            Pedido
+                          </th>
+                          <th className="w-28 px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                            Total
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -366,19 +375,42 @@ export default function Dashboard() {
                             <td className="px-4 py-3 font-semibold text-neutral-800">{item.mercadoria}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-1.5">
-                                {item.tipos.map((tipo) => (
-                                  <span
-                                    key={tipo.chave}
-                                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-bold ${
-                                      tipo.fraco ? "bg-warning-50 text-warning-700" : "bg-success-50 text-success-700"
-                                    }`}
-                                  >
-                                    {tipo.qtd}{tipo.label ? ` ${tipo.label}` : ""}
-                                  </span>
-                                ))}
+                                {item.feito.length === 0 ? (
+                                  <span className="text-xs text-neutral-400">—</span>
+                                ) : (
+                                  item.feito.map((chip) => <ChipLinha key={chip.chave} chip={chip} />)
+                                )}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-center font-bold">{item.total}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {item.pedido.length === 0 ? (
+                                  <span className="text-xs text-neutral-400">—</span>
+                                ) : (
+                                  item.pedido.map((chip) => (
+                                    <ChipLinha
+                                      key={chip.chave}
+                                      chip={chip}
+                                      onRemove={() => (chip.pedidoIds ?? []).forEach(removePedido)}
+                                    />
+                                  ))
+                                )}
+                                {item.status === "bate" ? (
+                                  <span className="text-[11px] font-bold uppercase tracking-wide text-success-600">
+                                    bate
+                                  </span>
+                                ) : item.status === "falta" ? (
+                                  <span className="text-[11px] font-bold uppercase tracking-wide text-warning-700">
+                                    falta {item.diferenca}
+                                  </span>
+                                ) : item.status === "passou" ? (
+                                  <span className="text-[11px] font-bold uppercase tracking-wide text-danger-500">
+                                    passou {item.diferenca}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold">{item.totalFeito}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -387,6 +419,16 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+            <PedidoModal
+              open={pedidoAberto}
+              data={data}
+              clienteInicial={pedidoCliente}
+              onClose={() => {
+                setPedidoAberto(false);
+                setPedidoCliente("");
+              }}
+              onSalvar={addPedido}
+            />
           </div>
         )}
 

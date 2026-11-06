@@ -3,7 +3,7 @@ import { api, checarBanco, consumirLiberacao, ErroApi, tokenLiberacao } from "..
 import { idsPendentes, limparPendente, marcarPendente, ouvirSync, registrarVersao } from "../api/sync";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
-import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
+import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, PedidoCliente, SaidaLancamento } from "../types";
 import {
   destinosDaFolhaNoDia,
   destinosDoEstoqueNoDia,
@@ -15,6 +15,7 @@ import {
   tipoPadraoDestino,
 } from "../utils/alocacao";
 import { destinoPersistivel } from "../utils/destino";
+import { pedidoExistente, pedidoPersistivel } from "../utils/pedido";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
 import { loadFromStorage, saveToStorage } from "../utils/storage";
@@ -23,6 +24,7 @@ export type StatusBanco = "conectando" | "vivo" | "local";
 
 interface PlanilhaContextValue {
   entradas: EntradaLancamento[];
+  pedidos: PedidoCliente[];
   dataInicial: string;
   usandoBanco: boolean;
   statusBanco: StatusBanco;
@@ -32,6 +34,8 @@ interface PlanilhaContextValue {
   addEntrada: (dados: Omit<EntradaLancamento, "id">) => string;
   updateEntrada: (id: string, patch: Partial<Omit<EntradaLancamento, "id">>) => void;
   removeEntrada: (id: string) => void;
+  addPedido: (dados: Omit<PedidoCliente, "id">) => string;
+  removePedido: (id: string) => void;
   addDestino: (entradaId: string, destino: Omit<DestinoEntrada, "id">) => void;
   updateDestino: (entradaId: string, destinoId: string, patch: Partial<Omit<DestinoEntrada, "id">>) => void;
   removeDestino: (entradaId: string, destinoId: string) => void;
@@ -132,19 +136,36 @@ function mesclarEntradas(
   return [...porId.values(), ...vazias];
 }
 
+function mesclarPedidos(
+  local: PedidoCliente[],
+  remoto: PedidoCliente[],
+  pendentes: Set<string>,
+): PedidoCliente[] {
+  const porId = new Map(remoto.map((pedido) => [pedido.id, pedido]));
+  for (const pedido of local) {
+    if (pendentes.has(pedido.id) || (!porId.has(pedido.id) && pedidoPersistivel(pedido))) {
+      porId.set(pedido.id, pedido);
+    }
+  }
+  return [...porId.values()];
+}
+
 const PlanilhaContext = createContext<PlanilhaContextValue | undefined>(undefined);
 
 export function PlanilhaProvider({ children }: { children: ReactNode }) {
   const { showError } = useToast();
   const { encerrarLiberacao } = useAuth();
   const [entradas, setEntradas] = useState<EntradaLancamento[]>(estadoInicialEntradas);
+  const [pedidos, setPedidos] = useState<PedidoCliente[]>(() => loadFromStorage("pedidos-v1", []));
   const [statusBanco, setStatusBanco] = useState<StatusBanco>("conectando");
   const [gravadas, setGravadas] = useState<Record<string, EntradaLancamento>>({});
   const timers = useRef(new Map<string, number>());
   const bancoRef = useRef(false);
   const entradasRef = useRef(entradas);
+  const pedidosRef = useRef(pedidos);
   const gravadasRef = useRef(gravadas);
   entradasRef.current = entradas;
+  pedidosRef.current = pedidos;
   gravadasRef.current = gravadas;
   const usandoBanco = statusBanco === "vivo";
 
@@ -167,7 +188,9 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        const dados = await api.get<{ versao: number; entradas: EntradaLancamento[] }>("/sync");
+        const dados = await api.get<{ versao: number; entradas: EntradaLancamento[]; pedidos?: PedidoCliente[] }>(
+          "/sync",
+        );
         if (cancelado) return;
         bancoRef.current = true;
         registrarVersao(dados.versao);
@@ -180,12 +203,21 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         const rascunhos = atuais.filter(
           (entrada) => !entradaPersistivel(entrada) && !idsBanco.has(entrada.id),
         );
+        const pedidosBanco = dados.pedidos ?? [];
+        const idsPedidosBanco = new Set(pedidosBanco.map((pedido) => pedido.id));
+        const novosPedidos = pedidosRef.current
+          .filter(pedidoPersistivel)
+          .filter((pedido) => !idsPedidosBanco.has(pedido.id));
         if (novosLocais.length > 0) {
           await Promise.all(novosLocais.map((entrada) => api.put(`/entradas/${entrada.id}`, paraApi(entrada))));
+        }
+        if (novosPedidos.length > 0) {
+          await Promise.all(novosPedidos.map((pedido) => api.put(`/pedidos/${pedido.id}`, pedido)));
         }
         if (!cancelado) {
           const unidas = [...doBanco, ...novosLocais, ...rascunhos];
           setEntradas(completarLinhasVazias(unidas, toISODate()));
+          setPedidos([...pedidosBanco, ...novosPedidos]);
           registrarGravadas(unidas);
           setStatusBanco("vivo");
         }
@@ -203,6 +235,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     if (!usandoBanco) return;
     return ouvirSync((pacote) => {
       setEntradas((local) => mesclarEntradas(local, pacote.entradas, idsPendentes()));
+      setPedidos((local) => mesclarPedidos(local, pacote.pedidos ?? [], idsPendentes()));
       setGravadas((prev) => {
         const next = { ...prev };
         const pendentes = idsPendentes();
@@ -217,6 +250,10 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!usandoBanco) saveToStorage("lancamentos-entradas-v5", entradas);
   }, [entradas, usandoBanco]);
+
+  useEffect(() => {
+    if (!usandoBanco) saveToStorage("pedidos-v1", pedidos.filter(pedidoPersistivel));
+  }, [pedidos, usandoBanco]);
 
   function agendarSalvar(entrada: EntradaLancamento) {
     if (!bancoRef.current) return;
@@ -267,11 +304,34 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  function agendarSalvarPedido(pedido: PedidoCliente) {
+    if (!bancoRef.current) return;
+    marcarPendente(pedido.id);
+    const atual = timers.current.get(pedido.id);
+    if (atual) window.clearTimeout(atual);
+    if (!pedidoPersistivel(pedido)) {
+      void api.delete(`/pedidos/${pedido.id}`).finally(() => limparPendente(pedido.id));
+      return;
+    }
+    timers.current.set(
+      pedido.id,
+      window.setTimeout(() => {
+        void api
+          .put(`/pedidos/${pedido.id}`, pedido)
+          .catch((erro) => {
+            if (erro instanceof ErroApi) showError(erro.message);
+          })
+          .finally(() => limparPendente(pedido.id));
+      }, 300),
+    );
+  }
+
   const saidas = useMemo(() => saidasDerivadas(entradas), [entradas]);
 
   const value = useMemo<PlanilhaContextValue>(
     () => ({
       entradas,
+      pedidos,
       dataInicial: toISODate(),
       usandoBanco,
       statusBanco,
@@ -346,6 +406,36 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
           return proxima;
         });
       },
+      addPedido: (dados) => {
+        const existente = pedidoExistente(
+          pedidosRef.current,
+          dados.data,
+          dados.cliente,
+          dados.mercadoria,
+          dados.tipo,
+        );
+        if (existente) {
+          const atualizado = { ...existente, qtd: existente.qtd + dados.qtd };
+          setPedidos((prev) => prev.map((pedido) => (pedido.id === existente.id ? atualizado : pedido)));
+          agendarSalvarPedido(atualizado);
+          return existente.id;
+        }
+        const id = generateId("ped");
+        const pedido: PedidoCliente = { ...dados, id };
+        setPedidos((prev) => [...prev, pedido]);
+        agendarSalvarPedido(pedido);
+        return id;
+      },
+      removePedido: (id) => {
+        const timer = timers.current.get(id);
+        if (timer) window.clearTimeout(timer);
+        timers.current.delete(id);
+        setPedidos((prev) => prev.filter((pedido) => pedido.id !== id));
+        if (bancoRef.current) {
+          marcarPendente(id);
+          void api.delete(`/pedidos/${id}`).finally(() => limparPendente(id));
+        }
+      },
       removeDestino: (entradaId, destinoId) => {
         setEntradas((prev) => {
           const proxima = prev.map((entrada) =>
@@ -391,7 +481,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       resumo: (data) => resumoDoDia(entradas, data),
       sobras: () => sobrasPorDia(entradas),
     }),
-    [entradas, saidas, usandoBanco, statusBanco, gravadas],
+    [entradas, pedidos, saidas, usandoBanco, statusBanco, gravadas],
   );
 
   return <PlanilhaContext.Provider value={value}>{children}</PlanilhaContext.Provider>;

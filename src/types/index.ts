@@ -116,6 +116,16 @@ export interface EntradaLancamento {
   destinos?: DestinoEntrada[];
 }
 
+/** Pedido do cliente naquele dia — para conferir se o destino lançado está batendo */
+export interface PedidoCliente {
+  id: string;
+  data: string;
+  cliente: string;
+  mercadoria: string;
+  tipo: string;
+  qtd: number;
+}
+
 export type TipoSaida = "cliente" | "perda";
 
 /** Pedido ou perda lançado — o sistema divide sozinho entre os produtores */

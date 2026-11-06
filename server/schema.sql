@@ -63,6 +63,17 @@ CREATE TABLE IF NOT EXISTS destinos (
 CREATE INDEX IF NOT EXISTS idx_entradas_data ON entradas(data);
 CREATE INDEX IF NOT EXISTS idx_destinos_entrada ON destinos(entrada_id);
 
+CREATE TABLE IF NOT EXISTS pedidos (
+  id TEXT PRIMARY KEY,
+  data DATE NOT NULL,
+  cliente TEXT NOT NULL DEFAULT '',
+  mercadoria TEXT NOT NULL DEFAULT '',
+  tipo TEXT NOT NULL DEFAULT 'BOM',
+  qtd NUMERIC NOT NULL DEFAULT 0,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pedidos_data ON pedidos(data);
+
 CREATE TABLE IF NOT EXISTS sync_meta (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   versao BIGINT NOT NULL DEFAULT 0

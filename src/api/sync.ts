@@ -1,4 +1,4 @@
-import type { Cliente, EntradaLancamento, Fornecedor, Produto } from "../types";
+import type { Cliente, EntradaLancamento, Fornecedor, PedidoCliente, Produto } from "../types";
 import { api } from "./http";
 
 export type PacoteSync = {
@@ -7,6 +7,7 @@ export type PacoteSync = {
   fornecedores: Fornecedor[];
   produtos: Produto[];
   clientes: Cliente[];
+  pedidos?: PedidoCliente[];
 };
 
 type Ouvinte = (pacote: PacoteSync) => void;
