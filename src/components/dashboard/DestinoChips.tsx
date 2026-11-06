@@ -1,6 +1,6 @@
 import type { DestinoEntrada } from "../../types";
 import { abrevCliente } from "../../utils/abrev";
-import { abrevTipo, qtdDestino, tipoEhFraco, tipoEhPerda } from "../../utils/classificacao";
+import { abrevTipo, qtdDestino, tipoEhEstoque, tipoEhFraco, tipoEhPerda } from "../../utils/classificacao";
 
 export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
   return (
@@ -12,9 +12,17 @@ export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
         const osDois = !tipo && (destino.boa ?? 0) > 0 && (destino.fraca ?? 0) > 0;
         const fraco = tipoEhFraco(tipo) || soFraca;
         const ehPerda = tipoEhPerda(tipo);
+        const ehEstoque = tipoEhEstoque(tipo);
         return (
           <span key={destino.id} className="contents">
-            {ehPerda ? (
+            {ehEstoque ? (
+              qtd > 0 ? (
+                <span className="inline-flex items-center rounded-md bg-warning-50 px-2 py-0.5 text-xs font-bold text-warning-700">
+                  {qtd} estoque
+                  <sup className="ml-0.5 text-[9px] font-extrabold">fr</sup>
+                </span>
+              ) : null
+            ) : ehPerda ? (
               (destino.perda ?? qtd) > 0 ? (
                 <span className="inline-flex items-center rounded-md bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
                   {destino.perda ?? qtd} perda
@@ -40,7 +48,7 @@ export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
                 {abrevTipo(tipo) ? ` ${abrevTipo(tipo)}` : fraco ? <sup className="ml-0.5 text-[9px] font-extrabold">fr</sup> : null}
               </span>
             ) : null}
-            {!ehPerda && (destino.perda ?? 0) > 0 && (
+            {!ehPerda && !ehEstoque && (destino.perda ?? 0) > 0 && (
               <span className="inline-flex items-center rounded-md bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
                 {destino.perda} perda
               </span>

@@ -25,18 +25,26 @@ export function labelTipo(mercadoria: string, tipo: string): string {
   return tipo;
 }
 
-export function opcoesClassificacao(mercadoria: string): { value: string; label: string }[] {
+export function opcoesClassificacao(
+  mercadoria: string,
+  origemEstoque = false,
+): { value: string; label: string }[] {
   return [
     ...tiposDaMercadoria(mercadoria).map((tipo) => ({
       value: tipo,
       label: labelTipo(mercadoria, tipo),
     })),
+    ...(!origemEstoque ? [{ value: "Estoque", label: "Sobra fraca" }] : []),
     { value: "Perda", label: "Perda" },
   ];
 }
 
 export function tipoEhPerda(tipo?: string): boolean {
   return semAcento(tipo ?? "") === "perda";
+}
+
+export function tipoEhEstoque(tipo?: string): boolean {
+  return semAcento(tipo ?? "") === "estoque";
 }
 
 export function tipoEhFraco(tipo?: string): boolean {
@@ -46,6 +54,7 @@ export function tipoEhFraco(tipo?: string): boolean {
 export function abrevTipo(tipo?: string): string {
   const chave = semAcento(tipo ?? "");
   if (chave === "bom" || chave === "graudo" || chave === "aaa") return "";
+  if (chave === "estoque") return "EST";
   if (chave === "fraco") return "FR";
   if (chave === "saladao") return "SAL";
   if (chave === "verde") return "VD";
@@ -54,7 +63,7 @@ export function abrevTipo(tipo?: string): string {
 
 export function qtdDestino(destino: DestinoEntrada): number | null {
   if (tipoEhPerda(destino.tipo)) return destino.perda ?? destino.boa ?? destino.fraca;
-  if (tipoEhFraco(destino.tipo)) return destino.fraca ?? destino.boa;
+  if (tipoEhEstoque(destino.tipo) || tipoEhFraco(destino.tipo)) return destino.fraca ?? destino.boa;
   return destino.boa ?? destino.fraca;
 }
 
@@ -63,7 +72,7 @@ export function patchQtd(
   qtd: number | null,
 ): Pick<DestinoEntrada, "boa" | "fraca" | "perda"> {
   if (tipoEhPerda(tipo)) return { boa: null, fraca: null, perda: qtd };
-  if (tipoEhFraco(tipo)) return { boa: null, fraca: qtd, perda: null };
+  if (tipoEhEstoque(tipo) || tipoEhFraco(tipo)) return { boa: null, fraca: qtd, perda: null };
   return { boa: qtd, fraca: null, perda: null };
 }
 
@@ -83,7 +92,7 @@ export type ResumoFeitaTomate = {
 export function grupoTipoTomate(tipo?: string): keyof ResumoFeitaTomate {
   const chave = semAcento(tipo ?? "");
   if (chave === "perda") return "perda";
-  if (chave === "fraco") return "fr";
+  if (chave === "fraco" || chave === "estoque") return "fr";
   if (chave === "aa") return "aa";
   if (chave === "a") return "a";
   return "bom";
@@ -102,9 +111,14 @@ export function ordemClassificacao(mercadoria: string, tipo: string): number {
   return i === -1 ? 50 : i;
 }
 
-export function resumoFeitaTomate(destinos: DestinoEntrada[]): ResumoFeitaTomate {
+export function resumoFeitaTomate(destinos: DestinoEntrada[], qtdMeta?: number | null): ResumoFeitaTomate {
   const resumo: ResumoFeitaTomate = { bom: 0, aa: 0, a: 0, fr: 0, perda: 0 };
+  let reserva = 0;
   for (const destino of destinos) {
+    if (tipoEhEstoque(destino.tipo)) {
+      reserva += qtdDestino(destino) ?? 0;
+      continue;
+    }
     if (!tipoEhPerda(destino.tipo)) resumo.perda += destino.perda ?? 0;
     const qtd = qtdDestino(destino) ?? 0;
     if (qtd <= 0) continue;
@@ -113,5 +127,8 @@ export function resumoFeitaTomate(destinos: DestinoEntrada[]): ResumoFeitaTomate
     const grupo = soFraca ? "fr" : grupoTipoTomate(destino.tipo);
     resumo[grupo] += qtd;
   }
+  const vendido = resumo.bom + resumo.aa + resumo.a + resumo.fr + resumo.perda;
+  const restante = qtdMeta == null ? reserva : Math.max(0, qtdMeta - vendido);
+  resumo.fr += Math.min(reserva, restante);
   return resumo;
 }

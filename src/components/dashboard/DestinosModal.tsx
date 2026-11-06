@@ -1,11 +1,22 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AutorizarModal } from "../auth/AutorizarModal";
+import { CampoTravado } from "../auth/CampoTravado";
+import { useAuth } from "../../context/AuthContext";
 import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
+import { campoTravado } from "../../utils/permissoes";
 import type { EntradaLancamento } from "../../types";
-import { destinosDaFolhaNoDia, destinosDoEstoqueNoDia } from "../../utils/alocacao";
-import { opcoesClassificacao, patchQtd, patchTipo, qtdDestino } from "../../utils/classificacao";
-import { resumoDestinos } from "../../utils/destino";
+import { destinosDaFolhaNoDia, destinosDoEstoqueNoDia, tipoPadraoDestino } from "../../utils/alocacao";
+import {
+  ehTomate,
+  opcoesClassificacao,
+  patchQtd,
+  patchTipo,
+  qtdDestino,
+  tipoEhEstoque,
+} from "../../utils/classificacao";
+import { destinoPersistivel, resumoDestinos } from "../../utils/destino";
 import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
@@ -13,6 +24,9 @@ import { Select } from "../ui/Select";
 
 const modalInputClass =
   "h-10 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-sm text-neutral-700 placeholder:text-neutral-300 outline-none transition focus:border-brand-400 focus:ring-4 focus:ring-brand-100";
+
+const LINHAS_DESTINO_PADRAO = 6;
+const MAX_DESTINOS_DIA = 20;
 
 interface DestinosModalProps {
   open: boolean;
@@ -24,8 +38,10 @@ interface DestinosModalProps {
 }
 
 export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, origemEstoque }: DestinosModalProps) {
-  const { entradas, addDestino, updateDestino, removeDestino } = usePlanilha();
+  const { entradas, addDestino, updateDestino, removeDestino, garantirDestinosDoDia, entradaGravada } = usePlanilha();
   const { clientes } = useData();
+  const { usuario, travas, modoLivre, estaLiberado } = useAuth();
+  const [pedirDestinos, setPedirDestinos] = useState(false);
 
   const atual = entrada ? entradas.find((e) => e.id === entrada.id) ?? entrada : undefined;
   const destinos = atual
@@ -33,11 +49,42 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
       ? destinosDoEstoqueNoDia(atual, dataDestino)
       : destinosDaFolhaNoDia(atual, dataDestino)
     : [];
+  const preenchidos = destinos.filter(destinoPersistivel).length;
+  const destinosTravados = Boolean(
+    atual &&
+      campoTravado({
+        usuario,
+        travas,
+        gravada: entradaGravada(atual.id),
+        campo: "destinos",
+        liberado: estaLiberado(atual.id, "destinos"),
+        modoLivre,
+      }),
+  );
+
+  useEffect(() => {
+    if (!open || !atual) return;
+    const origem = origemEstoque ? "estoque" : "folha";
+    const vazios = destinos.length - preenchidos;
+    let alvo = Math.max(LINHAS_DESTINO_PADRAO, destinos.length);
+    if (vazios === 0) alvo = Math.min(MAX_DESTINOS_DIA, destinos.length + 1);
+    garantirDestinosDoDia(atual.id, dataDestino, origem, alvo);
+  }, [
+    open,
+    atual?.id,
+    dataDestino,
+    origemEstoque,
+    destinos.length,
+    preenchidos,
+    garantirDestinosDoDia,
+  ]);
 
   const clientesSugestao = useMemo(() => {
     const nomes = new Set(clientes.map((c) => c.nome));
     for (const e of entradas) {
-      for (const d of e.destinos ?? []) if (d.cliente.trim()) nomes.add(d.cliente);
+      for (const d of e.destinos ?? []) {
+        if (destinoPersistivel(d) && d.cliente.trim() && !tipoEhEstoque(d.tipo)) nomes.add(d.cliente);
+      }
     }
     return [...nomes].sort();
   }, [clientes, entradas]);
@@ -52,11 +99,11 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
           descricao ??
           (atual ? `${atual.produtor || "Produtor"} · ${atual.mercadoria || "Mercadoria"}` : undefined)
         }
-        size="lg"
+        size="xl"
       >
         {atual && (
           <div className="flex flex-col gap-4">
-            <div className="overflow-hidden rounded-xl border border-neutral-200">
+            <div className="rounded-xl border border-neutral-200">
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-neutral-50">
@@ -67,38 +114,57 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                   </tr>
                 </thead>
                 <tbody>
-                  {destinos.length === 0 && (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
-                        Nenhum destino neste dia. Clique em Adicionar destino.
-                      </td>
-                    </tr>
-                  )}
-                  {destinos.map((destino) => (
-                    <tr key={destino.id} className="border-t border-neutral-100">
-                      <td className="p-1.5">
-                        <Autocomplete
-                          compact
-                          value={destino.cliente}
-                          onChange={(cliente) =>
-                            updateDestino(atual.id, destino.id, { cliente, data: dataDestino })
-                          }
-                          sugestoes={clientesSugestao}
-                          placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
-                        />
-                      </td>
+                  {destinos.map((destino) => {
+                    const linhaTravada = destinosTravados && destinoPersistivel(destino);
+                    return (
+                      <tr key={destino.id} className="border-t border-neutral-100">
+                        <td className="p-1.5" colSpan={linhaTravada ? 4 : undefined}>
+                          {linhaTravada ? (
+                            <CampoTravado travado onLiberar={() => setPedirDestinos(true)}>
+                              <p className="px-2 py-2 text-sm text-neutral-500">
+                                Destino já gravado · {destino.cliente || "sem cliente"} · {qtdDestino(destino) ?? 0}
+                              </p>
+                            </CampoTravado>
+                          ) : tipoEhEstoque(destino.tipo) ? (
+                            <input
+                              readOnly
+                              value="Estoque"
+                              className={`${modalInputClass} bg-warning-50 text-warning-700`}
+                            />
+                          ) : (
+                            <Autocomplete
+                              value={destino.cliente}
+                              onChange={(cliente) =>
+                                updateDestino(atual.id, destino.id, { cliente, data: dataDestino })
+                              }
+                              sugestoes={clientesSugestao}
+                              placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
+                            />
+                          )}
+                        </td>
+                        {!linhaTravada && (
+                          <>
                       <td className="p-1.5">
                         <Select
-                          value={destino.tipo ?? ""}
-                          onChange={(e) =>
-                            updateDestino(atual.id, destino.id, {
-                              ...patchTipo(e.target.value, destino),
-                              data: dataDestino,
-                            })
+                          value={
+                            destino.tipo?.trim() ||
+                            (ehTomate(atual.mercadoria) ? "AAA" : "BOM")
                           }
+                          onChange={(e) => {
+                            const tipo = e.target.value;
+                            const patch: Partial<typeof destino> = {
+                              ...patchTipo(tipo, destino),
+                              data: dataDestino,
+                            };
+                            if (tipoEhEstoque(tipo)) patch.cliente = "Estoque";
+                            else if (tipoEhEstoque(destino.tipo) && destino.cliente.trim().toLowerCase() === "estoque") {
+                              patch.cliente = "";
+                            }
+                            updateDestino(atual.id, destino.id, patch);
+                          }}
                         >
                           <option value="">Classificar</option>
-                          {opcoesClassificacao(atual.mercadoria).map((opcao) => (
+                          {opcoesClassificacao(atual.mercadoria, origemEstoque).map((opcao) => (
                             <option key={opcao.value} value={opcao.value}>
                               {opcao.label}
                             </option>
@@ -129,8 +195,11 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                           <Trash2 size={14} />
                         </button>
                       </td>
+                          </>
+                        )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -145,7 +214,11 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                     cliente: "",
                     data: dataDestino,
                     origem: origemEstoque ? "estoque" : "folha",
-                    tipo: "",
+                    tipo: tipoPadraoDestino(
+                      atual.mercadoria,
+                      origemEstoque ? "estoque" : "folha",
+                      atual,
+                    ),
                     boa: null,
                     fraca: null,
                     perda: null,
@@ -172,17 +245,43 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
               >
                 Adicionar perda
               </Button>
+              {!origemEstoque && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<Plus size={15} />}
+                  onClick={() => {
+                    addDestino(atual.id, {
+                      cliente: "Estoque",
+                      data: dataDestino,
+                      origem: "folha",
+                      tipo: "Estoque",
+                      boa: null,
+                      fraca: null,
+                      perda: null,
+                    });
+                  }}
+                >
+                  Sobra fraca no estoque
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-3">
               <p className="text-sm text-neutral-500">Total desta entrega</p>
               {(() => {
-                const r = resumoDestinos(destinos);
+                const estoque = destinos
+                  .filter((d) => tipoEhEstoque(d.tipo))
+                  .reduce((soma, d) => soma + (qtdDestino(d) ?? 0), 0);
+                const r = resumoDestinos(destinos.filter((d) => !tipoEhEstoque(d.tipo)));
+                const total = r.total + estoque;
                 return (
                   <p className="text-sm font-semibold text-neutral-700">
-                    {r.total}{" "}
+                    {total}{" "}
                     <span className="font-normal text-neutral-400">
-                      ({r.boa} bom · {r.fraca} fraco{r.perda > 0 ? ` · ${r.perda} perda` : ""})
+                      ({r.boa} bom · {r.fraca} fraco
+                      {estoque > 0 ? ` · ${estoque} estoque fraco` : ""}
+                      {r.perda > 0 ? ` · ${r.perda} perda` : ""})
                     </span>
                   </p>
                 );
@@ -195,6 +294,15 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
           </div>
         )}
       </Modal>
+      {atual && (
+        <AutorizarModal
+          open={pedirDestinos}
+          entradaId={atual.id}
+          campos={["destinos"]}
+          onClose={() => setPedirDestinos(false)}
+          onLiberou={() => setPedirDestinos(false)}
+        />
+      )}
     </>
   );
 }

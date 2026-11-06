@@ -1,18 +1,30 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Leaf, LogOut, Settings, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
 import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
+import { useAuth } from "../context/AuthContext";
 import { usePlanilha } from "../context/PlanilhaContext";
 import { abrevMercadoria } from "../utils/abrev";
-import { destinosDoDia, destinosDoEstoqueNoDia, restanteEntradaDireto } from "../utils/alocacao";
-import { abrevTipo, nomeTipoCliente, ordemClassificacao, qtdDestino, tipoEhFraco, tipoEhPerda } from "../utils/classificacao";
+import {
+  compararLancamento,
+  destinosDoDia,
+  destinosDoEstoqueNoDia,
+  fracaEmEstoque,
+  ordemDeLancamento,
+  restanteEntradaDireto,
+} from "../utils/alocacao";
+import { destinoPersistivel } from "../utils/destino";
+import { abrevTipo, nomeTipoCliente, ordemClassificacao, qtdDestino, tipoEhEstoque, tipoEhFraco, tipoEhPerda } from "../utils/classificacao";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
 
 type Aba = "folha" | "clientes" | "sobras" | "relatorios";
+
+const SHELL = "mx-auto w-full max-w-[2400px] px-3 sm:px-5 lg:px-8";
 
 function Stat({
   label,
@@ -38,7 +50,8 @@ function Stat({
 }
 
 export default function Dashboard() {
-  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras, usandoBanco } = usePlanilha();
+  const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras, statusBanco } = usePlanilha();
+  const { usuario, pode, precisaSetup, logout, modoLivre } = useAuth();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
@@ -47,7 +60,7 @@ export default function Dashboard() {
   useEffect(() => {
     garantirLinhasDoDia(data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, statusBanco]);
 
   const linhasDoDia = getLinhas(data);
   const stats = resumo(data);
@@ -69,20 +82,23 @@ export default function Dashboard() {
         produtor: entrada.produtor || "Sem fornecedor",
         mercadoria: entrada.mercadoria,
         restante: restanteEntradaDireto(entrada),
+        fraca: fracaEmEstoque(entrada),
         abrev: abrevMercadoria(entrada.mercadoria),
       });
       grupos.set(entrada.data, lista);
     }
 
+    const ordem = ordemDeLancamento(entradas);
     return [...grupos.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([dia, itens]) => ({
-        data: dia,
-        itens: [...itens].sort(
-          (a, b) => a.produtor.localeCompare(b.produtor, "pt-BR") || a.mercadoria.localeCompare(b.mercadoria, "pt-BR"),
-        ),
-        total: itens.reduce((soma, item) => soma + item.restante, 0),
-      }));
+      .map(([dia, itens]) => {
+        const naOrdem = [...itens].sort((a, b) => compararLancamento(ordem, a.entradaId, b.entradaId));
+        return {
+          data: dia,
+          itens: naOrdem,
+          total: naOrdem.reduce((soma, item) => soma + item.restante, 0),
+        };
+      });
   }, [sobrasPendentes, entradas, data]);
 
   const saidasPorCliente = useMemo(() => {
@@ -93,7 +109,7 @@ export default function Dashboard() {
       const mercadoria = entrada.mercadoria || "Mercadoria";
       for (const destino of destinosDoDia(entrada, data)) {
         const cliente = destino.cliente.trim();
-        if (!cliente || tipoEhPerda(destino.tipo)) continue;
+        if (!cliente || tipoEhPerda(destino.tipo) || tipoEhEstoque(destino.tipo)) continue;
 
         const tipo = destino.tipo?.trim() ?? "";
         const soFraca = !tipo && (destino.fraca ?? 0) > 0 && !(destino.boa ?? 0);
@@ -155,17 +171,22 @@ export default function Dashboard() {
   const pct = (n: number) => (totalBarra > 0 ? `${(n / totalBarra) * 100}%` : "0%");
 
   const abas = [
-    { id: "folha" as Aba, label: "Folha do dia" },
-    { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length },
-    { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true },
-    { id: "relatorios" as Aba, label: "Relatórios" },
-  ];
+    { id: "folha" as Aba, label: "Folha do dia", visivel: pode("folha") },
+    { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length, visivel: pode("porCliente") },
+    { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true, visivel: pode("sobras") },
+    { id: "relatorios" as Aba, label: "Relatórios", visivel: pode("relatorios") },
+  ].filter((tab) => tab.visivel);
+
+  useEffect(() => {
+    if (abas.some((tab) => tab.id === aba)) return;
+    if (abas[0]) setAba(abas[0].id);
+  }, [aba, abas]);
 
   return (
     <div className="min-h-screen bg-neutral-50">
       <header className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
+        <div className={`${SHELL} flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3`}>
+          <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
               <Leaf size={18} strokeWidth={2.2} />
             </span>
@@ -177,7 +198,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => setData((d) => addDays(d, -1))} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Dia anterior">
               <ChevronLeft size={20} />
             </button>
@@ -195,24 +216,91 @@ export default function Dashboard() {
             )}
             <span
               className={`ml-2 hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide sm:inline-flex ${
-                usandoBanco ? "bg-success-50 text-success-600" : "bg-warning-50 text-warning-600"
+                statusBanco === "vivo"
+                  ? "bg-success-50 text-success-600"
+                  : statusBanco === "conectando"
+                    ? "bg-brand-50 text-brand-600"
+                    : "bg-warning-50 text-warning-600"
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${usandoBanco ? "bg-success-500" : "bg-warning-500"}`} />
-              {usandoBanco ? "Banco ao vivo" : "Só neste computador"}
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  statusBanco === "vivo"
+                    ? "bg-success-500"
+                    : statusBanco === "conectando"
+                      ? "animate-pulse bg-brand-500"
+                      : "bg-warning-500"
+                }`}
+              />
+              {statusBanco === "vivo"
+                ? "Banco ao vivo"
+                : statusBanco === "conectando"
+                  ? "Conectando…"
+                  : "Só neste computador"}
             </span>
+            {usuario && (
+              <span className="ml-1 hidden text-xs font-medium text-neutral-500 sm:inline">
+                {usuario.nome}
+              </span>
+            )}
+            <Link
+              to="/configuracoes"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+            >
+              <Settings size={14} />
+              Administração
+            </Link>
+            {pode("cadastros") && (
+              <div className="hidden items-center gap-1 md:flex">
+                <Link to="/fornecedores" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                  Produtores
+                </Link>
+                <Link to="/produtos" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                  Produtos
+                </Link>
+                <Link to="/clientes" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                  Clientes
+                </Link>
+              </div>
+            )}
+            {!modoLivre && usuario && (
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
+              >
+                <LogOut size={14} />
+                Sair
+              </button>
+            )}
           </div>
         </div>
       </header>
 
+      {precisaSetup && (
+        <div className="border-b border-brand-200 bg-brand-50">
+          <div className={`${SHELL} flex flex-wrap items-center justify-between gap-2 py-2.5`}>
+            <p className="text-sm text-brand-800">
+              Ainda não tem responsável cadastrado. Crie o primeiro (por exemplo o Ítalo) para travar quantidade, definir quem acessa o quê e o que cada um vê na folha.
+            </p>
+            <Link
+              to="/configuracoes"
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              Cadastrar responsável
+            </Link>
+          </div>
+        </div>
+      )}
+
       <div className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-[1400px] px-6">
+        <div className={`${SHELL} flex overflow-x-auto`}>
           {abas.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setAba(tab.id)}
-              className={`flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-medium ${
+              className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium whitespace-nowrap sm:px-5 ${
                 aba === tab.id ? "border-brand-600 text-brand-700" : "border-transparent text-neutral-500 hover:text-neutral-700"
               }`}
             >
@@ -227,13 +315,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1400px] px-6 py-5">
+      <div className={`${SHELL} py-4 sm:py-5`}>
         {aba !== "relatorios" && (
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
           </p>
-          <div className="flex flex-wrap items-end gap-5">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <Stat label="Estoque" value={stats.estoque} />
             <span className="mb-5 text-lg text-neutral-300">+</span>
             <Stat label="Recebido" value={stats.recebido} />
@@ -348,7 +436,9 @@ export default function Dashboard() {
                         <tbody>
                           {dia.itens.map((item) => {
                             const entrada = entradas.find((e) => e.id === item.entradaId);
-                            const vendidoHoje = entrada ? destinosDoEstoqueNoDia(entrada, data) : [];
+                            const vendidoHoje = entrada
+                              ? destinosDoEstoqueNoDia(entrada, data).filter(destinoPersistivel)
+                              : [];
                             return (
                               <tr key={item.entradaId} className="border-t border-neutral-100">
                                 <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
@@ -359,6 +449,11 @@ export default function Dashboard() {
                                 <td className="px-4 py-3 text-right">
                                   <span className="inline-flex items-center rounded-md border border-dashed border-warning-500/40 bg-warning-50 px-2.5 py-1 text-sm font-bold text-warning-700">
                                     {item.restante} cx
+                                    {item.fraca > 0 ? (
+                                      <sup className="ml-0.5 text-[9px] font-extrabold">
+                                        {item.fraca >= item.restante ? "fr" : `${item.fraca} fr`}
+                                      </sup>
+                                    ) : null}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3">
@@ -370,9 +465,11 @@ export default function Dashboard() {
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <Button size="sm" variant="outline" onClick={() => setDestinoSobraId(item.entradaId)}>
-                                    Destino
-                                  </Button>
+                                  {pode("destinos") && (
+                                    <Button size="sm" variant="outline" onClick={() => setDestinoSobraId(item.entradaId)}>
+                                      Destino
+                                    </Button>
+                                  )}
                                 </td>
                               </tr>
                             );

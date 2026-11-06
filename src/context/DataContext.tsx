@@ -53,6 +53,17 @@ function cadastroReal<T extends { id: string }>(itens: T[]): T[] {
   return itens.filter((item) => !/^(forn|prod|cli)-\d+$/.test(item.id));
 }
 
+function unirPorId<T extends { id: string }>(remoto: T[], local: T[]): { todos: T[]; novos: T[] } {
+  const porId = new Map(remoto.map((item) => [item.id, item]));
+  const novos: T[] = [];
+  for (const item of local) {
+    if (porId.has(item.id)) continue;
+    porId.set(item.id, item);
+    novos.push(item);
+  }
+  return { todos: [...porId.values()], novos };
+}
+
 const DataContext = createContext<DataContextValue | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
@@ -69,6 +80,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [anotacoes, setAnotacoes] = useLocalStorageState<Anotacao[]>("anotacoes", anotacoesMock);
   const bancoRef = useRef(false);
   const [usandoBanco, setUsandoBanco] = useState(false);
+  const fornRef = useRef(fornecedores);
+  const prodRef = useRef(produtos);
+  const cliRef = useRef(clientes);
+  fornRef.current = fornecedores;
+  prodRef.current = produtos;
+  cliRef.current = clientes;
 
   useEffect(() => {
     const precisaNormalizar = produtos.some((p) => (p.tipos ?? []).some((t) => t.includes(",")));
@@ -98,27 +115,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (cancelado) return;
         bancoRef.current = true;
 
-        const locaisForn = cadastroReal(loadFromStorage("fornecedores", fornecedoresMock));
-        const locaisProd = cadastroReal(loadFromStorage("produtos", produtosMock));
-        const locaisCli = cadastroReal(loadFromStorage("clientes", clientesMock));
+        const locaisForn = cadastroReal(fornRef.current);
+        const locaisProd = cadastroReal(prodRef.current);
+        const locaisCli = cadastroReal(cliRef.current);
 
-        const forn = fornApi.length > 0 ? fornApi : locaisForn;
-        const prod = prodApi.length > 0 ? prodApi : locaisProd;
-        const cli = cliApi.length > 0 ? cliApi : locaisCli;
+        const forn = unirPorId(fornApi, locaisForn);
+        const prod = unirPorId(prodApi, locaisProd);
+        const cli = unirPorId(cliApi, locaisCli);
 
-        if (fornApi.length === 0) {
-          await Promise.all(forn.map((item) => api.put(`/fornecedores/${item.id}`, item)));
-        }
-        if (prodApi.length === 0) {
-          await Promise.all(prod.map((item) => api.put(`/produtos/${item.id}`, item)));
-        }
-        if (cliApi.length === 0) {
-          await Promise.all(cli.map((item) => api.put(`/clientes/${item.id}`, item)));
-        }
+        await Promise.all([
+          ...forn.novos.map((item) => api.put(`/fornecedores/${item.id}`, item)),
+          ...prod.novos.map((item) => api.put(`/produtos/${item.id}`, item)),
+          ...cli.novos.map((item) => api.put(`/clientes/${item.id}`, item)),
+        ]);
 
-        setFornecedores(forn);
-        setProdutos(prod);
-        setClientes(cli);
+        setFornecedores(forn.todos);
+        setProdutos(prod.todos);
+        setClientes(cli.todos);
         if (!cancelado) setUsandoBanco(true);
       } catch {
         bancoRef.current = false;

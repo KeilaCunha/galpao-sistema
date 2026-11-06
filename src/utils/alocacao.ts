@@ -1,5 +1,6 @@
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import { abrevMercadoria, mercadoriasIguais } from "./abrev";
+import { ehTomate, tipoEhEstoque } from "./classificacao";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
   return entrada.qtd;
@@ -143,10 +144,32 @@ export function consumidoDaEntrada(
   destinos: DestinoEntrada[] | undefined,
 ): number {
   if (!destinos) return 0;
-  return destinos.reduce(
-    (soma, destino) => soma + (destino.boa ?? 0) + (destino.fraca ?? 0) + (destino.perda ?? 0),
-    0,
-  );
+  return destinos.reduce((soma, destino) => {
+    if (tipoEhEstoque(destino.tipo)) return soma;
+    return soma + (destino.boa ?? 0) + (destino.fraca ?? 0) + (destino.perda ?? 0);
+  }, 0);
+}
+
+export function qtdReservaEstoque(entrada: EntradaLancamento): number {
+  return destinosDa(entrada)
+    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .reduce((soma, destino) => soma + (destino.fraca ?? 0) + (destino.boa ?? 0), 0);
+}
+
+export function fracaEmEstoque(entrada: EntradaLancamento, ateData?: string): number {
+  return Math.min(qtdReservaEstoque(entrada), restanteEntradaDireto(entrada, ateData));
+}
+
+export function tipoPadraoDestino(
+  mercadoria: string,
+  origem: "folha" | "estoque",
+  entrada?: EntradaLancamento,
+): string {
+  if (origem === "estoque" && entrada) {
+    const restante = restanteEntradaDireto(entrada);
+    if (restante > 0 && fracaEmEstoque(entrada) >= restante) return "FRACO";
+  }
+  return ehTomate(mercadoria) ? "AAA" : "BOM";
 }
 
 export function disponivelMercadoria(
@@ -189,6 +212,7 @@ export function resumoDoDia(entradas: EntradaLancamento[], data: string) {
   for (const entrada of entradas) {
     for (const destino of destinosDa(entrada)) {
       if (dataDoDestino(destino, entrada) !== data) continue;
+      if (tipoEhEstoque(destino.tipo)) continue;
       if ((destino.perda ?? 0) > 0) perda += destino.perda ?? 0;
       else {
         feitoBom += destino.boa ?? 0;
@@ -259,6 +283,7 @@ export function migrarSaidasParaDestinos(
 export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[] {
   return entradas.flatMap((entrada) =>
     destinosDa(entrada)
+      .filter((destino) => !tipoEhEstoque(destino.tipo))
       .filter((destino) => destino.cliente.trim() || (destino.perda ?? 0) > 0 || (destino.boa ?? 0) > 0 || (destino.fraca ?? 0) > 0)
       .map((destino) => ({
         id: destino.id,
@@ -288,7 +313,16 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
     }));
 }
 
+export function ordemDeLancamento(entradas: EntradaLancamento[]): Map<string, number> {
+  return new Map(entradas.map((entrada, indice) => [entrada.id, indice]));
+}
+
+export function compararLancamento(ordem: Map<string, number>, aId: string, bId: string): number {
+  return (ordem.get(aId) ?? Number.MAX_SAFE_INTEGER) - (ordem.get(bId) ?? Number.MAX_SAFE_INTEGER);
+}
+
 export function sobrasAtuais(entradas: EntradaLancamento[]) {
+  const ordem = ordemDeLancamento(entradas);
   return entradas
     .filter(entradaValida)
     .map((entrada) => ({
@@ -297,12 +331,18 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
       consumido: consumidoDaEntrada(destinosDa(entrada)),
     }))
     .filter((item) => item.restante > 0)
-    .sort((a, b) => a.entrada.data.localeCompare(b.entrada.data));
+    .sort(
+      (a, b) =>
+        a.entrada.data.localeCompare(b.entrada.data) || compararLancamento(ordem, a.entrada.id, b.entrada.id),
+    );
 }
 
-/** Sobra ainda em estoque, agrupada por dia — com o fornecedor da carga. */
+/** Sobra ainda em estoque, agrupada por dia — na ordem em que a carga foi lançada. */
 export function sobrasPorDia(entradas: EntradaLancamento[]) {
-  const porDia = new Map<string, { entradaId: string; produtor: string; mercadoria: string; restante: number }[]>();
+  const porDia = new Map<
+    string,
+    { entradaId: string; produtor: string; mercadoria: string; restante: number; fraca: number }[]
+  >();
 
   for (const item of sobrasAtuais(entradas)) {
     const dia = item.entrada.data;
@@ -312,6 +352,7 @@ export function sobrasPorDia(entradas: EntradaLancamento[]) {
       produtor: item.entrada.produtor || "Sem fornecedor",
       mercadoria: item.entrada.mercadoria,
       restante: item.restante,
+      fraca: fracaEmEstoque(item.entrada),
     });
     porDia.set(dia, lista);
   }
@@ -319,9 +360,7 @@ export function sobrasPorDia(entradas: EntradaLancamento[]) {
   return [...porDia.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([data, linhas]) => {
-      const itens = linhas
-        .map((item) => ({ ...item, abrev: abrevMercadoria(item.mercadoria) }))
-        .sort((a, b) => a.produtor.localeCompare(b.produtor, "pt-BR") || a.mercadoria.localeCompare(b.mercadoria, "pt-BR"));
+      const itens = linhas.map((item) => ({ ...item, abrev: abrevMercadoria(item.mercadoria) }));
       return {
         data,
         itens,

@@ -1,6 +1,7 @@
 import { FileDown, HardDriveDownload } from "lucide-react";
 import { useMemo, useState } from "react";
 import { baixarBackup } from "../../api/http";
+import { useAuth } from "../../context/AuthContext";
 import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import { useToast } from "../../context/ToastContext";
@@ -19,6 +20,8 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
   const { entradas, usandoBanco } = usePlanilha();
   const { fornecedores, produtos, clientes } = useData();
   const { showSuccess, showError } = useToast();
+  const { verColuna } = useAuth();
+  const verPreco = verColuna("preco");
   const [baixando, setBaixando] = useState(false);
   const [tipo, setTipo] = useState<TipoRelatorio>("operacao");
   const [de, setDe] = useState(dia);
@@ -102,7 +105,9 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
           <Button
             icon={<FileDown size={16} />}
             onClick={() =>
-              tipo === "operacao" ? imprimirRelatorioOperacao(operacao) : imprimirRelatorioFornecedor(fornecedor)
+              tipo === "operacao"
+                ? imprimirRelatorioOperacao(operacao)
+                : imprimirRelatorioFornecedor(fornecedor, verPreco)
             }
           >
             Gerar PDF
@@ -168,7 +173,7 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
       {tipo === "operacao" ? (
         <PreviewOperacao relatorio={operacao} />
       ) : (
-        <PreviewFornecedor relatorio={fornecedor} nome={fornecedorSel} />
+        <PreviewFornecedor relatorio={fornecedor} nome={fornecedorSel} verPreco={verPreco} />
       )}
     </div>
   );
@@ -222,9 +227,11 @@ function PreviewOperacao({ relatorio }: { relatorio: ReturnType<typeof montarRel
 function PreviewFornecedor({
   relatorio,
   nome,
+  verPreco,
 }: {
   relatorio: ReturnType<typeof montarRelatorioFornecedor>;
   nome: string;
+  verPreco: boolean;
 }) {
   if (relatorio.grupos.length === 0) {
     return (
@@ -236,16 +243,16 @@ function PreviewFornecedor({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${verPreco ? "grid-cols-2" : "grid-cols-1"}`}>
         <Card label="Caixas recebidas" value={relatorio.veio} />
-        <Card label="Total a pagar" value={formatCurrency(relatorio.valor)} />
+        {verPreco && <Card label="Total a pagar" value={formatCurrency(relatorio.valor)} />}
       </div>
       {relatorio.grupos.map((grupo) => (
         <section key={grupo.produtor} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
           <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3">
             <h3 className="text-sm font-bold text-neutral-800">{grupo.produtor}</h3>
             <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">
-              {grupo.veio} cx · {formatCurrency(grupo.valor)}
+              {grupo.veio} cx{verPreco ? ` · ${formatCurrency(grupo.valor)}` : ""}
             </span>
           </div>
           <table className="w-full text-sm">
@@ -257,8 +264,12 @@ function PreviewFornecedor({
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-success-600">Boa</th>
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-warning-600">Fraca</th>
                 <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Perda</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Preço</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Valor</th>
+                {verPreco && (
+                  <>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Preço</th>
+                    <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-neutral-500">Valor</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -270,21 +281,25 @@ function PreviewFornecedor({
                   <td className="px-4 py-2.5 text-right tabular-nums text-success-600">{linha.boa || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-warning-600">{linha.fraca || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{linha.perda || "—"}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">
-                    {linha.preco == null && linha.precoFraco == null ? (
-                      "—"
-                    ) : (
-                      <span className="flex flex-col items-end leading-tight">
-                        {linha.preco != null && <span>{formatCurrency(linha.preco)}</span>}
-                        {linha.precoFraco != null && (
-                          <span className="text-warning-600">{formatCurrency(linha.precoFraco)}</span>
+                  {verPreco && (
+                    <>
+                      <td className="px-4 py-2.5 text-right tabular-nums">
+                        {linha.preco == null && linha.precoFraco == null ? (
+                          "—"
+                        ) : (
+                          <span className="flex flex-col items-end leading-tight">
+                            {linha.preco != null && <span>{formatCurrency(linha.preco)}</span>}
+                            {linha.precoFraco != null && (
+                              <span className="text-warning-600">{formatCurrency(linha.precoFraco)}</span>
+                            )}
+                          </span>
                         )}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
-                    {linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}
-                  </td>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
+                        {linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

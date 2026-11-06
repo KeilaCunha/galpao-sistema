@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FieldWrapper } from "./FormField";
 
 interface AutocompleteProps {
@@ -15,6 +16,14 @@ interface AutocompleteProps {
   autoFocus?: boolean;
 }
 
+function semAcento(valor: string): string {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 export function Autocomplete({
   label,
   value,
@@ -29,18 +38,50 @@ export function Autocomplete({
   autoFocus,
 }: AutocompleteProps) {
   const [aberto, setAberto] = useState(false);
+  const [posicao, setPosicao] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const termo = value.trim().toLowerCase();
-  const filtradas = termo
-    ? sugestoes.filter((item) => item.toLowerCase().includes(termo)).slice(0, 10)
+  const termo = value.trim();
+  const busca = semAcento(termo);
+  const filtradas = busca
+    ? sugestoes
+        .filter((item) => {
+          const nome = semAcento(item);
+          return nome.includes(busca) && nome !== busca;
+        })
+        .sort((a, b) => {
+          const aComeca = semAcento(a).startsWith(busca) ? 0 : 1;
+          const bComeca = semAcento(b).startsWith(busca) ? 0 : 1;
+          return aComeca - bComeca || a.localeCompare(b, "pt-BR");
+        })
+        .slice(0, 10)
     : [];
+
+  const mostrar = aberto && filtradas.length > 0;
+
+  useLayoutEffect(() => {
+    if (!mostrar) return;
+    const atualizar = () => {
+      const el = inputRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setPosicao({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 180) });
+    };
+    atualizar();
+    window.addEventListener("scroll", atualizar, true);
+    window.addEventListener("resize", atualizar);
+    return () => {
+      window.removeEventListener("scroll", atualizar, true);
+      window.removeEventListener("resize", atualizar);
+    };
+  }, [mostrar, value]);
 
   const campo = (
     <div className="relative">
       <input
         ref={inputRef}
         autoFocus={autoFocus}
+        autoComplete="off"
         className={
           compact
             ? "h-9 w-full rounded-md bg-transparent px-2 text-sm text-neutral-700 placeholder:text-neutral-300 outline-none transition focus:bg-brand-50/70 focus:ring-2 focus:ring-brand-300"
@@ -58,23 +99,30 @@ export function Autocomplete({
         placeholder={placeholder}
         disabled={disabled}
       />
-      {aberto && filtradas.length > 0 && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-0.5 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl">
-          {filtradas.map((item) => (
-            <button
-              key={item}
-              type="button"
-              onMouseDown={() => {
-                onChange(item);
-                setAberto(false);
-              }}
-              className="flex w-full px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-brand-50"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      )}
+      {mostrar &&
+        posicao &&
+        createPortal(
+          <div
+            className="fixed z-[80] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl"
+            style={{ top: posicao.top, left: posicao.left, width: posicao.width }}
+          >
+            {filtradas.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onChange(item);
+                  setAberto(false);
+                }}
+                className="flex w-full px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-brand-50"
+              >
+                {item}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 

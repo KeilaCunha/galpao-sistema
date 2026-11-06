@@ -75,3 +75,50 @@ CREATE TABLE IF NOT EXISTS copias_seguranca (
   payload JSONB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_copias_criado ON copias_seguranca (criado_em DESC);
+
+CREATE TABLE IF NOT EXISTS usuarios (
+  id TEXT PRIMARY KEY,
+  nome TEXT NOT NULL UNIQUE,
+  pin_hash TEXT NOT NULL,
+  papel TEXT NOT NULL DEFAULT 'operador',
+  ativo BOOLEAN NOT NULL DEFAULT TRUE,
+  permissoes JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sessoes (
+  token TEXT PRIMARY KEY,
+  usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  expira_em TIMESTAMPTZ NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sessoes_usuario ON sessoes(usuario_id);
+
+CREATE TABLE IF NOT EXISTS config_sistema (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  travas JSONB NOT NULL DEFAULT '{"qtd":true,"produtor":false,"mercadoria":false,"preco":false,"destinos":false}'::jsonb
+);
+INSERT INTO config_sistema (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS autorizacoes (
+  token TEXT PRIMARY KEY,
+  usuario_id TEXT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  entrada_id TEXT,
+  campos TEXT[] NOT NULL DEFAULT '{}',
+  expira_em TIMESTAMPTZ NOT NULL,
+  usado BOOLEAN NOT NULL DEFAULT FALSE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS auditoria (
+  id TEXT PRIMARY KEY,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  usuario_id TEXT,
+  usuario_nome TEXT NOT NULL DEFAULT '',
+  autorizado_por_id TEXT,
+  autorizado_por_nome TEXT,
+  acao TEXT NOT NULL,
+  alvo TEXT,
+  detalhe JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_auditoria_criado ON auditoria (criado_em DESC);

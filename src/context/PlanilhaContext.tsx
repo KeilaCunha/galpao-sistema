@@ -1,22 +1,32 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, checarBanco } from "../api/http";
+import { api, checarBanco, consumirLiberacao, ErroApi, tokenLiberacao } from "../api/http";
 import { idsPendentes, limparPendente, marcarPendente, ouvirSync, registrarVersao } from "../api/sync";
+import { useAuth } from "./AuthContext";
+import { useToast } from "./ToastContext";
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import {
+  destinosDaFolhaNoDia,
+  destinosDoEstoqueNoDia,
   migrarSaidasParaDestinos,
   montarLinhas,
   resumoDoDia,
   saidasDerivadas,
   sobrasPorDia,
+  tipoPadraoDestino,
 } from "../utils/alocacao";
+import { destinoPersistivel } from "../utils/destino";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
 import { loadFromStorage, saveToStorage } from "../utils/storage";
+
+export type StatusBanco = "conectando" | "vivo" | "local";
 
 interface PlanilhaContextValue {
   entradas: EntradaLancamento[];
   dataInicial: string;
   usandoBanco: boolean;
+  statusBanco: StatusBanco;
+  entradaGravada: (id: string) => EntradaLancamento | undefined;
   getLinhas: (data: string) => LinhaPlanilha[];
   getSaidasDoDia: (data: string) => SaidaLancamento[];
   addEntrada: (dados: Omit<EntradaLancamento, "id">) => string;
@@ -26,11 +36,36 @@ interface PlanilhaContextValue {
   updateDestino: (entradaId: string, destinoId: string, patch: Partial<Omit<DestinoEntrada, "id">>) => void;
   removeDestino: (entradaId: string, destinoId: string) => void;
   garantirLinhasDoDia: (data: string, minimo?: number) => void;
+  garantirDestinosDoDia: (
+    entradaId: string,
+    data: string,
+    origem: "folha" | "estoque",
+    minimo?: number,
+  ) => void;
   resumo: (data: string) => ReturnType<typeof resumoDoDia>;
   sobras: () => ReturnType<typeof sobrasPorDia>;
 }
 
-const LINHAS_PADRAO = 5;
+const LINHAS_PADRAO = 12;
+const LINHAS_DESTINO_PADRAO = 6;
+
+function criarDestinosVazios(
+  quantidade: number,
+  data: string,
+  origem: "folha" | "estoque",
+  tipo: string,
+): DestinoEntrada[] {
+  return Array.from({ length: quantidade }, () => ({
+    id: generateId("dest"),
+    cliente: "",
+    data,
+    origem,
+    tipo,
+    boa: null,
+    fraca: null,
+    perda: null,
+  }));
+}
 
 function criarEntradasVazias(data: string, quantidade: number): EntradaLancamento[] {
   return Array.from({ length: quantidade }, () => ({
@@ -65,8 +100,22 @@ function entradaPersistivel(entrada: EntradaLancamento): boolean {
       entrada.qtd > 0 ||
       (entrada.preco != null && entrada.preco > 0) ||
       (entrada.precoFraco != null && entrada.precoFraco > 0) ||
-      (entrada.destinos?.length ?? 0) > 0,
+      (entrada.destinos ?? []).some(destinoPersistivel),
   );
+}
+
+function paraApi(entrada: EntradaLancamento): EntradaLancamento {
+  return { ...entrada, destinos: (entrada.destinos ?? []).filter(destinoPersistivel) };
+}
+
+function completarLinhasVazias(
+  lista: EntradaLancamento[],
+  data: string,
+  minimo = LINHAS_PADRAO,
+): EntradaLancamento[] {
+  const doDia = lista.filter((entrada) => entrada.data === data).length;
+  if (doDia >= minimo) return lista;
+  return [...lista, ...criarEntradasVazias(data, minimo - doDia)];
 }
 
 function mesclarEntradas(
@@ -86,10 +135,26 @@ function mesclarEntradas(
 const PlanilhaContext = createContext<PlanilhaContextValue | undefined>(undefined);
 
 export function PlanilhaProvider({ children }: { children: ReactNode }) {
+  const { showError } = useToast();
+  const { encerrarLiberacao } = useAuth();
   const [entradas, setEntradas] = useState<EntradaLancamento[]>(estadoInicialEntradas);
-  const [usandoBanco, setUsandoBanco] = useState(false);
+  const [statusBanco, setStatusBanco] = useState<StatusBanco>("conectando");
+  const [gravadas, setGravadas] = useState<Record<string, EntradaLancamento>>({});
   const timers = useRef(new Map<string, number>());
   const bancoRef = useRef(false);
+  const entradasRef = useRef(entradas);
+  const gravadasRef = useRef(gravadas);
+  entradasRef.current = entradas;
+  gravadasRef.current = gravadas;
+  const usandoBanco = statusBanco === "vivo";
+
+  function registrarGravadas(lista: EntradaLancamento[]) {
+    const mapa: Record<string, EntradaLancamento> = {};
+    for (const entrada of lista) {
+      if (entradaPersistivel(entrada)) mapa[entrada.id] = paraApi(entrada);
+    }
+    setGravadas(mapa);
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -98,7 +163,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       if (cancelado) return;
       if (!ok) {
         bancoRef.current = false;
-        setUsandoBanco(false);
+        setStatusBanco("local");
         return;
       }
       try {
@@ -107,17 +172,26 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         bancoRef.current = true;
         registrarVersao(dados.versao);
         const doBanco = dados.entradas ?? [];
-        const locais = estadoInicialEntradas().filter(entradaPersistivel);
-        if (doBanco.length === 0 && locais.length > 0) {
-          await Promise.all(locais.map((entrada) => api.put(`/entradas/${entrada.id}`, entrada)));
-          if (!cancelado) setEntradas(locais);
-        } else {
-          setEntradas(doBanco);
+        const idsBanco = new Set(doBanco.map((entrada) => entrada.id));
+        const atuais = entradasRef.current;
+        const novosLocais = atuais
+          .filter(entradaPersistivel)
+          .filter((entrada) => !idsBanco.has(entrada.id));
+        const rascunhos = atuais.filter(
+          (entrada) => !entradaPersistivel(entrada) && !idsBanco.has(entrada.id),
+        );
+        if (novosLocais.length > 0) {
+          await Promise.all(novosLocais.map((entrada) => api.put(`/entradas/${entrada.id}`, paraApi(entrada))));
         }
-        if (!cancelado) setUsandoBanco(true);
+        if (!cancelado) {
+          const unidas = [...doBanco, ...novosLocais, ...rascunhos];
+          setEntradas(completarLinhasVazias(unidas, toISODate()));
+          registrarGravadas(unidas);
+          setStatusBanco("vivo");
+        }
       } catch {
         bancoRef.current = false;
-        setUsandoBanco(false);
+        setStatusBanco("local");
       }
     })();
     return () => {
@@ -129,6 +203,14 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     if (!usandoBanco) return;
     return ouvirSync((pacote) => {
       setEntradas((local) => mesclarEntradas(local, pacote.entradas, idsPendentes()));
+      setGravadas((prev) => {
+        const next = { ...prev };
+        const pendentes = idsPendentes();
+        for (const entrada of pacote.entradas) {
+          if (!pendentes.has(entrada.id) && entradaPersistivel(entrada)) next[entrada.id] = paraApi(entrada);
+        }
+        return next;
+      });
     });
   }, [usandoBanco]);
 
@@ -142,13 +224,45 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     const atual = timers.current.get(entrada.id);
     if (atual) window.clearTimeout(atual);
     if (!entradaPersistivel(entrada)) {
-      void api.delete(`/entradas/${entrada.id}`).finally(() => limparPendente(entrada.id));
+      void api
+        .delete(`/entradas/${entrada.id}`)
+        .then(() => {
+          setGravadas((prev) => {
+            const { [entrada.id]: _apagada, ...resto } = prev;
+            return resto;
+          });
+        })
+        .catch((erro) => {
+          if (erro instanceof ErroApi && erro.status === 403) {
+            const anterior = gravadasRef.current[entrada.id];
+            if (anterior) setEntradas((prev) => prev.map((item) => (item.id === entrada.id ? anterior : item)));
+            showError(erro.message);
+          }
+        })
+        .finally(() => limparPendente(entrada.id));
       return;
     }
     timers.current.set(
       entrada.id,
       window.setTimeout(() => {
-        void api.put(`/entradas/${entrada.id}`, entrada).finally(() => limparPendente(entrada.id));
+        const autorizacaoToken = tokenLiberacao(entrada.id);
+        void api
+          .put(`/entradas/${entrada.id}`, { ...paraApi(entrada), autorizacaoToken })
+          .then(() => {
+            if (autorizacaoToken) {
+              consumirLiberacao(entrada.id);
+              encerrarLiberacao(entrada.id);
+            }
+            setGravadas((prev) => ({ ...prev, [entrada.id]: paraApi(entrada) }));
+          })
+          .catch((erro) => {
+            if (erro instanceof ErroApi && (erro.status === 403 || erro.status === 401)) {
+              const anterior = gravadasRef.current[entrada.id];
+              if (anterior) setEntradas((prev) => prev.map((item) => (item.id === entrada.id ? anterior : item)));
+              showError(erro.message);
+            }
+          })
+          .finally(() => limparPendente(entrada.id));
       }, 300),
     );
   }
@@ -160,6 +274,8 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       entradas,
       dataInicial: toISODate(),
       usandoBanco,
+      statusBanco,
+      entradaGravada: (id) => gravadas[id],
       getLinhas: (data) => montarLinhas(entradas, data),
       getSaidasDoDia: (data) => saidas.filter((saida) => saida.data === data),
       addEntrada: (dados) => {
@@ -181,10 +297,23 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         const timer = timers.current.get(id);
         if (timer) window.clearTimeout(timer);
         timers.current.delete(id);
+        const snapshot = gravadasRef.current[id];
         setEntradas((prev) => prev.filter((entrada) => entrada.id !== id));
         if (bancoRef.current) {
           marcarPendente(id);
-          void api.delete(`/entradas/${id}`).finally(() => limparPendente(id));
+          void api
+            .delete(`/entradas/${id}`)
+            .then(() => {
+              setGravadas((prev) => {
+                const { [id]: _apagada, ...resto } = prev;
+                return resto;
+              });
+            })
+            .catch((erro) => {
+              if (snapshot) setEntradas((prev) => [...prev, snapshot]);
+              if (erro instanceof ErroApi) showError(erro.message);
+            })
+            .finally(() => limparPendente(id));
         }
       },
       addDestino: (entradaId, destino) => {
@@ -236,10 +365,33 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
           return [...prev, ...criarEntradasVazias(data, minimo - doDia)];
         });
       },
+      garantirDestinosDoDia: (entradaId, data, origem, minimo = LINHAS_DESTINO_PADRAO) => {
+        setEntradas((prev) => {
+          const entrada = prev.find((item) => item.id === entradaId);
+          if (!entrada) return prev;
+          const atuais =
+            origem === "estoque"
+              ? destinosDoEstoqueNoDia(entrada, data)
+              : destinosDaFolhaNoDia(entrada, data);
+          const faltam = minimo - atuais.length;
+          if (faltam <= 0) return prev;
+          return prev.map((item) =>
+            item.id === entradaId
+              ? {
+                  ...item,
+                  destinos: [
+                    ...(item.destinos ?? []),
+                    ...criarDestinosVazios(faltam, data, origem, tipoPadraoDestino(item.mercadoria, origem, item)),
+                  ],
+                }
+              : item,
+          );
+        });
+      },
       resumo: (data) => resumoDoDia(entradas, data),
       sobras: () => sobrasPorDia(entradas),
     }),
-    [entradas, saidas, usandoBanco],
+    [entradas, saidas, usandoBanco, statusBanco, gravadas],
   );
 
   return <PlanilhaContext.Provider value={value}>{children}</PlanilhaContext.Provider>;

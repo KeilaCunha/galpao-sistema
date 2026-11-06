@@ -6,6 +6,7 @@ export interface RouteInfo {
 
 export const ROUTES: RouteInfo[] = [
   { path: "/", title: "Início", subtitle: "Visão geral do galpão" },
+  { path: "/configuracoes", title: "Administração", subtitle: "Pessoas, colunas da folha, travas e auditoria" },
   { path: "/fornecedores", title: "Fornecedores", subtitle: "Gerencie os fornecedores cadastrados" },
   { path: "/produtos", title: "Produtos", subtitle: "Gerencie os produtos comercializados" },
   { path: "/classificacoes", title: "Classificações", subtitle: "Gerencie as classificações de produtos" },

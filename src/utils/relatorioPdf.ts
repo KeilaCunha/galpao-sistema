@@ -96,7 +96,7 @@ export function imprimirRelatorioOperacao(relatorio: RelatorioOperacao) {
   abrirImpressao(titulo, corpo);
 }
 
-export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
+export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor, verPreco = true) {
   const titulo = "Relatório por fornecedor";
   const grupos = relatorio.grupos
     .map((grupo) => {
@@ -110,14 +110,18 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
             <td class="num">${linha.boa}</td>
             <td class="num">${linha.fraca}</td>
             <td class="num">${linha.perda}</td>
-            <td class="num">${
-              linha.preco == null && linha.precoFraco == null
-                ? "—"
-                : [linha.preco != null ? formatCurrency(linha.preco) : null, linha.precoFraco != null ? formatCurrency(linha.precoFraco) : null]
-                    .filter(Boolean)
-                    .join("<br>")
-            }</td>
-            <td class="num">${linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}</td>
+            ${
+              verPreco
+                ? `<td class="num">${
+                    linha.preco == null && linha.precoFraco == null
+                      ? "—"
+                      : [linha.preco != null ? formatCurrency(linha.preco) : null, linha.precoFraco != null ? formatCurrency(linha.precoFraco) : null]
+                          .filter(Boolean)
+                          .join("<br>")
+                  }</td>
+            <td class="num">${linha.preco == null && linha.precoFraco == null ? "—" : formatCurrency(linha.valor)}</td>`
+                : ""
+            }
           </tr>`,
         )
         .join("");
@@ -129,7 +133,7 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
               <tr>
                 <th>Data</th><th>Mercadoria</th>
                 <th class="num">Veio</th><th class="num">Boa</th><th class="num">Fraca</th><th class="num">Perda</th>
-                <th class="num">Preço</th><th class="num">Valor</th>
+                ${verPreco ? `<th class="num">Preço</th><th class="num">Valor</th>` : ""}
               </tr>
             </thead>
             <tbody>${linhas}</tbody>
@@ -140,8 +144,7 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
                 <td class="num">${grupo.boa}</td>
                 <td class="num">${grupo.fraca}</td>
                 <td class="num">${grupo.perda}</td>
-                <td></td>
-                <td class="num">${formatCurrency(grupo.valor)}</td>
+                ${verPreco ? `<td></td><td class="num">${formatCurrency(grupo.valor)}</td>` : ""}
               </tr>
             </tfoot>
           </table>
@@ -153,7 +156,7 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor) {
     ${cabecalho(titulo, relatorio.de, relatorio.ate, relatorio.grupos.length === 1 ? relatorio.grupos[0].produtor : undefined)}
     <div class="cards">
       <div class="card"><strong>${relatorio.veio}</strong><span>Caixas recebidas</span></div>
-      <div class="card"><strong>${formatCurrency(relatorio.valor)}</strong><span>Total a pagar</span></div>
+      ${verPreco ? `<div class="card"><strong>${formatCurrency(relatorio.valor)}</strong><span>Total a pagar</span></div>` : ""}
     </div>
     ${relatorio.grupos.length === 0 ? `<p class="vazio">Nenhuma carga neste período.</p>` : grupos}
   `;

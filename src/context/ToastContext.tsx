@@ -78,7 +78,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <span className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", ICON_BG[toast.type])}>
                 <Icon size={16} strokeWidth={2.5} />
               </span>
-              <p className="flex-1 text-sm font-medium text-neutral-700">{toast.message}</p>
+              <p className="flex-1 break-words text-sm font-medium text-neutral-700">{toast.message}</p>
               <button
                 type="button"
                 onClick={() => remove(toast.id)}

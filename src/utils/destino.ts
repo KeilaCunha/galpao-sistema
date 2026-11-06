@@ -1,5 +1,22 @@
 import type { DestinoEntrada, LinhaPlanilha } from "../types";
+import { tipoEhEstoque } from "./classificacao";
 import { addDays } from "./format";
+
+/** Destino com cliente, quantidade ou motivo — o rascunho vazio da modal não entra no banco. */
+export function destinoPersistivel(destino: DestinoEntrada): boolean {
+  if (
+    (destino.boa != null && destino.boa > 0) ||
+    (destino.fraca != null && destino.fraca > 0) ||
+    (destino.perda != null && destino.perda > 0) ||
+    destino.motivo?.trim()
+  ) {
+    return true;
+  }
+  const cliente = destino.cliente?.trim() ?? "";
+  if (!cliente) return false;
+  if (tipoEhEstoque(destino.tipo) || cliente.toLowerCase() === "estoque") return false;
+  return true;
+}
 
 export interface ResumoDestino {
   /** Soma das quantidades "boa" de todos os destinos */
@@ -28,6 +45,29 @@ export function resumoDestinos(destinos: DestinoEntrada[]): ResumoDestino {
   }
 
   return { boa, fraca, perda, total: boa + fraca + perda };
+}
+
+/**
+ * Qtd feita da linha: vendas realmente destinadas + reserva de estoque fraco
+ * que ainda cabe no restante. A reserva não conta de novo depois que a sobra
+ * for vendida na aba Sobras.
+ */
+export function resumoAlocado(destinos: DestinoEntrada[], qtd: number | null): ResumoDestino {
+  const vendas: DestinoEntrada[] = [];
+  const reservas: DestinoEntrada[] = [];
+  for (const destino of destinos) {
+    if (tipoEhEstoque(destino.tipo)) reservas.push(destino);
+    else vendas.push(destino);
+  }
+  const venda = resumoDestinos(vendas);
+  const reservaQtd = resumoDestinos(reservas).total;
+  const efetiva = qtd == null ? reservaQtd : Math.min(reservaQtd, Math.max(0, qtd - venda.total));
+  return {
+    boa: venda.boa,
+    fraca: venda.fraca + efetiva,
+    perda: venda.perda,
+    total: venda.total + efetiva,
+  };
 }
 
 /**
