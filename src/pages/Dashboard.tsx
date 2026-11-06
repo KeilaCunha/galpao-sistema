@@ -1,6 +1,7 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Leaf, LogOut, Settings, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Settings, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { SessaoTopo } from "../components/auth/SessaoTopo";
 import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
@@ -51,7 +52,7 @@ function Stat({
 
 export default function Dashboard() {
   const { dataInicial, entradas, getLinhas, garantirLinhasDoDia, resumo, sobras, statusBanco } = usePlanilha();
-  const { usuario, pode, precisaSetup, logout, modoLivre } = useAuth();
+  const { pode, precisaSetup } = useAuth();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
@@ -186,7 +187,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-neutral-50">
       <header className="border-b border-neutral-200 bg-white">
         <div className={`${SHELL} flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3`}>
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
               <Leaf size={18} strokeWidth={2.2} />
             </span>
@@ -196,6 +197,7 @@ export default function Dashboard() {
                 Controle de produção
               </p>
             </div>
+            <SessaoTopo />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -238,11 +240,6 @@ export default function Dashboard() {
                   ? "Conectando…"
                   : "Só neste computador"}
             </span>
-            {usuario && (
-              <span className="ml-1 hidden text-xs font-medium text-neutral-500 sm:inline">
-                {usuario.nome}
-              </span>
-            )}
             <Link
               to="/configuracoes"
               className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
@@ -263,16 +260,6 @@ export default function Dashboard() {
                 </Link>
               </div>
             )}
-            {!modoLivre && usuario && (
-              <button
-                type="button"
-                onClick={() => void logout()}
-                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
-              >
-                <LogOut size={14} />
-                Sair
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -281,7 +268,7 @@ export default function Dashboard() {
         <div className="border-b border-brand-200 bg-brand-50">
           <div className={`${SHELL} flex flex-wrap items-center justify-between gap-2 py-2.5`}>
             <p className="text-sm text-brand-800">
-              Ainda não tem responsável cadastrado. Crie o primeiro (por exemplo o Ítalo) para travar quantidade, definir quem acessa o quê e o que cada um vê na folha.
+              Ainda não tem responsável cadastrado. Crie o primeiro para travar quantidade, definir quem acessa o quê e o que cada um vê na folha.
             </p>
             <Link
               to="/configuracoes"

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { aoSessaoExpirar, api, definirToken, guardarLiberacao, tokenAtual } from "../api/http";
+import { aoSessaoExpirar, api, apiRemota, definirToken, guardarLiberacao, tokenAtual } from "../api/http";
 import type { CampoTrava, ChaveColunaFolha, Permissoes, Travas, Usuario, VisibilidadeFolha } from "../utils/permissoes";
 import {
   ehResponsavel,
@@ -61,14 +61,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         definirToken("");
         setUsuario(null);
         setPrecisaSetup(false);
-        setFase("livre");
+        setFase(apiRemota ? "login" : "livre");
         return;
       }
       if (!estado.configurado) {
         definirToken("");
         setUsuario(null);
         setPrecisaSetup(true);
-        setFase("livre");
+        setFase("login");
         return;
       }
       setPrecisaSetup(false);
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       definirToken("");
       setUsuario(null);
       setPrecisaSetup(false);
-      setFase("livre");
+      setFase(apiRemota ? "login" : "livre");
     }
   }, []);
 

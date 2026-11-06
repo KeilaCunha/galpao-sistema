@@ -60,7 +60,7 @@ export function AutorizarModal({
           void confirmar();
         }}
       >
-        <Input label="Nome do responsável" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ítalo ou Joni" autoFocus />
+        <Input label="Nome do responsável" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" autoFocus />
         <Input
           label="Senha numérica"
           value={pin}

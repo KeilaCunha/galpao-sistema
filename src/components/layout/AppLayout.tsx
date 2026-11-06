@@ -1,10 +1,9 @@
-import { Leaf, LogOut, Settings } from "lucide-react";
+import { Leaf, Settings } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { SessaoTopo } from "../auth/SessaoTopo";
 
 export function AppLayout() {
   const { pathname } = useLocation();
-  const { usuario, logout, modoLivre } = useAuth();
   const naFolha = pathname === "/";
 
   return (
@@ -30,17 +29,7 @@ export function AppLayout() {
                   Administração
                 </Link>
               )}
-              {usuario && <span className="text-xs font-medium text-neutral-500">{usuario.nome}</span>}
-              {!modoLivre && usuario && (
-                <button
-                  type="button"
-                  onClick={() => void logout()}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-neutral-500 hover:bg-neutral-100"
-                >
-                  <LogOut size={13} />
-                  Sair
-                </button>
-              )}
+              <SessaoTopo />
             </div>
           </div>
         </div>

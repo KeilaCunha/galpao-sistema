@@ -62,7 +62,7 @@ export default function Configuracoes() {
       <div className="mx-auto max-w-lg py-16 text-center">
         <Shield className="mx-auto mb-3 text-neutral-300" size={36} />
         <p className="text-sm font-medium text-neutral-600">Só o responsável configura o acesso.</p>
-        <p className="mt-1 text-xs text-neutral-400">Peça para o Ítalo ou o Joni entrar com o cadastro deles.</p>
+        <p className="mt-1 text-xs text-neutral-400">Peça para um administrador entrar com o cadastro dele.</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export default function Configuracoes() {
 
       {modoLivre && (
         <p className="mb-4 rounded-xl border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-800">
-          O banco ainda não está ligado neste computador. Primeiro cadastre o responsável (Ítalo) quando o selo da folha estiver verde; depois cadastre o Breno. No site isso só grava depois do SUBA.
+          O banco ainda não está ligado neste computador. O cadastro de pessoas só grava com o selo verde (Banco ao vivo). No site isso entra depois do SUBA.
         </p>
       )}
 
@@ -244,7 +244,7 @@ function PrimeiroResponsavel({
     <div className="mx-auto max-w-lg px-4 py-12">
       <PageHeader
         title="Primeiro responsável"
-        description="Cadastre quem vai configurar o sistema — em geral o Ítalo. Depois ele inclui o Joni como responsável e o Breno como operador, com o acesso que quiserem."
+        description="Cadastre quem vai configurar o sistema. Depois essa pessoa inclui os administradores e os operadores, com o acesso que quiserem."
       />
       <form
         className="mt-4 flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-6"
@@ -262,7 +262,7 @@ function PrimeiroResponsavel({
           }
         }}
       >
-        <Input label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ítalo" required />
+        <Input label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" required />
         <Input
           label="Senha (4 a 8 números)"
           value={pin}
@@ -332,7 +332,7 @@ function PainelPessoas({
       >
         <h3 className="mb-3 text-sm font-bold uppercase tracking-widest text-neutral-600">Nova pessoa</h3>
         <div className="flex flex-col gap-3">
-          <Input label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Breno" required />
+          <Input label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" required />
           <Input
             label="Senha (4 a 8 números)"
             value={pin}
@@ -522,7 +522,7 @@ function PainelColunas({
       <div className="rounded-2xl border border-neutral-200 bg-white p-5">
         <h3 className="text-sm font-bold text-neutral-800">O que cada um vê na folha do dia</h3>
         <p className="mt-1 text-sm text-neutral-600">
-          O responsável sempre vê tudo, inclusive o preço. No operador, desligue a coluna que não deve aparecer — por exemplo, o Breno vê produtor, quantidade, qtd feita, mercadoria e destino, mas o preço fica só com o Ítalo.
+          O administrador sempre vê tudo, inclusive o preço. No operador, desligue a coluna que não deve aparecer — por exemplo, deixar produtor, quantidade, qtd feita, mercadoria e destino, e esconder o preço.
         </p>
       </div>
       {operadores.length === 0 ? (

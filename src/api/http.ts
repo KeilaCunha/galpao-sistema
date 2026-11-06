@@ -1,8 +1,19 @@
 const base = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 const CHAVE_TOKEN = "galpao:sessao-token";
 
+export const apiRemota = Boolean(base);
+
+function lerTokenGuardado(): string {
+  try {
+    window.localStorage.removeItem(CHAVE_TOKEN);
+    return window.sessionStorage.getItem(CHAVE_TOKEN) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 const liberacoes = new Map<string, string>();
-let tokenMemoria = localStorage.getItem(CHAVE_TOKEN) ?? "";
+let tokenMemoria = lerTokenGuardado();
 let aoExpirar: (() => void) | null = null;
 
 export class ErroApi extends Error {
@@ -19,8 +30,13 @@ export function tokenAtual(): string {
 
 export function definirToken(token: string) {
   tokenMemoria = token;
-  if (token) localStorage.setItem(CHAVE_TOKEN, token);
-  else localStorage.removeItem(CHAVE_TOKEN);
+  try {
+    window.localStorage.removeItem(CHAVE_TOKEN);
+    if (token) window.sessionStorage.setItem(CHAVE_TOKEN, token);
+    else window.sessionStorage.removeItem(CHAVE_TOKEN);
+  } catch {
+    /* modo privado */
+  }
 }
 
 export function aoSessaoExpirar(fn: (() => void) | null) {

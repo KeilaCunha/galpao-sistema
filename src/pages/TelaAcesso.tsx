@@ -6,12 +6,12 @@ import { useAuth } from "../context/AuthContext";
 import { ErroApi } from "../api/http";
 
 export function TelaAcesso() {
-  const { login, setup, precisaSetup, fase } = useAuth();
+  const { login, setup, precisaSetup } = useAuth();
   const [nome, setNome] = useState("");
   const [pin, setPin] = useState("");
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
-  const primeiro = precisaSetup || fase === "livre";
+  const primeiro = precisaSetup;
 
   async function enviar() {
     setErro("");
@@ -36,15 +36,15 @@ export function TelaAcesso() {
           <div>
             <p className="text-sm font-bold uppercase tracking-widest text-neutral-800">Galpão Empório</p>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-400">
-              {primeiro ? "Primeiro responsável" : "Entrar no sistema"}
+              {primeiro ? "Primeiro responsável" : "Login de acesso"}
             </p>
           </div>
         </div>
 
         <p className="mb-5 text-sm text-neutral-600">
           {primeiro
-            ? "Cadastre quem vai cuidar das permissões — por exemplo o Ítalo. A senha é só números, de 4 a 8 dígitos. Depois você inclui o Joni, o Breno e quem mais precisar."
-            : "Entre com o nome e a senha. Keila, Italo e Joni já são administradores e podem cadastrar as outras pessoas."}
+            ? "Cadastre quem vai cuidar das permissões. A senha é só números, de 4 a 8 dígitos. Depois essa pessoa inclui as outras."
+            : "Toda vez que entrar no sistema, faça o login. Depois aparece o seu nome em cima, com a opção de sair e entrar de novo."}
         </p>
 
         <form
@@ -58,7 +58,7 @@ export function TelaAcesso() {
             label="Nome"
             value={nome}
             onChange={(e) => setNome(e.target.value)}
-            placeholder={primeiro ? "Keila" : "Keila, Italo ou Joni"}
+            placeholder="Nome"
             autoFocus
             required
           />
