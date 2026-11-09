@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, checarBanco, consumirLiberacao, ErroApi, tokenLiberacao } from "../api/http";
+import { api, apiRemota, checarBanco, consumirLiberacao, ErroApi, tokenLiberacao } from "../api/http";
 import { idsPendentes, limparPendente, marcarPendente, ouvirSync, registrarVersao } from "../api/sync";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
@@ -18,7 +18,7 @@ import { destinoPersistivel } from "../utils/destino";
 import { pedidoExistente, pedidoPersistivel } from "../utils/pedido";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
-import { loadFromStorage, saveToStorage } from "../utils/storage";
+import { loadFromStorage, removeFromStorage, saveToStorage } from "../utils/storage";
 
 export type StatusBanco = "conectando" | "vivo" | "local";
 
@@ -84,7 +84,20 @@ function criarEntradasVazias(data: string, quantidade: number): EntradaLancament
   }));
 }
 
+function limparLancamentosLocais() {
+  removeFromStorage(
+    "lancamentos-entradas-v5",
+    "lancamentos-entradas-v4",
+    "lancamentos-saidas-v4",
+    "pedidos-v1",
+  );
+}
+
 function estadoInicialEntradas(): EntradaLancamento[] {
+  if (apiRemota) {
+    limparLancamentosLocais();
+    return criarEntradasVazias(toISODate(), LINHAS_PADRAO);
+  }
   const v5 = loadFromStorage<EntradaLancamento[] | null>("lancamentos-entradas-v5", null);
   if (v5 && Array.isArray(v5) && v5.length > 0) {
     return v5.map((entrada) => ({ ...entrada, destinos: entrada.destinos ?? [] }));
@@ -155,7 +168,9 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   const { showError } = useToast();
   const { encerrarLiberacao } = useAuth();
   const [entradas, setEntradas] = useState<EntradaLancamento[]>(estadoInicialEntradas);
-  const [pedidos, setPedidos] = useState<PedidoCliente[]>(() => loadFromStorage("pedidos-v1", []));
+  const [pedidos, setPedidos] = useState<PedidoCliente[]>(() =>
+    apiRemota ? [] : loadFromStorage("pedidos-v1", []),
+  );
   const [statusBanco, setStatusBanco] = useState<StatusBanco>("conectando");
   const [gravadas, setGravadas] = useState<Record<string, EntradaLancamento>>({});
   const timers = useRef(new Map<string, number>());
@@ -228,11 +243,13 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   }, [usandoBanco]);
 
   useEffect(() => {
-    if (!usandoBanco) saveToStorage("lancamentos-entradas-v5", entradas);
+    if (apiRemota || usandoBanco) return;
+    saveToStorage("lancamentos-entradas-v5", entradas);
   }, [entradas, usandoBanco]);
 
   useEffect(() => {
-    if (!usandoBanco) saveToStorage("pedidos-v1", pedidos.filter(pedidoPersistivel));
+    if (apiRemota || usandoBanco) return;
+    saveToStorage("pedidos-v1", pedidos.filter(pedidoPersistivel));
   }, [pedidos, usandoBanco]);
 
   function agendarSalvar(entrada: EntradaLancamento) {

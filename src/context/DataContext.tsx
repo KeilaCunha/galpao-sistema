@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, checarBanco } from "../api/http";
+import { api, apiRemota, checarBanco } from "../api/http";
 import { limparPendente, marcarPendente, ouvirSync } from "../api/sync";
 import {
   anotacoesMock,
@@ -18,7 +18,7 @@ import type {
   Produto,
 } from "../types";
 import { generateId } from "../utils/id";
-import { loadFromStorage, saveToStorage, useLocalStorageState } from "../utils/storage";
+import { loadFromStorage, removeFromStorage, saveToStorage, useLocalStorageState } from "../utils/storage";
 
 interface DataContextValue {
   fornecedores: Fornecedor[];
@@ -53,11 +53,19 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | undefined>(undefined);
 
 export function DataProvider({ children }: { children: ReactNode }) {
-  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(() =>
-    loadFromStorage("fornecedores", fornecedoresMock),
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(() => {
+    if (apiRemota) {
+      removeFromStorage("fornecedores", "produtos", "clientes");
+      return [];
+    }
+    return loadFromStorage("fornecedores", fornecedoresMock);
+  });
+  const [produtos, setProdutos] = useState<Produto[]>(() =>
+    apiRemota ? [] : loadFromStorage("produtos", produtosMock),
   );
-  const [produtos, setProdutos] = useState<Produto[]>(() => loadFromStorage("produtos", produtosMock));
-  const [clientes, setClientes] = useState<Cliente[]>(() => loadFromStorage("clientes", clientesMock));
+  const [clientes, setClientes] = useState<Cliente[]>(() =>
+    apiRemota ? [] : loadFromStorage("clientes", clientesMock),
+  );
   const [classificacoes, setClassificacoes] = useLocalStorageState<Classificacao[]>(
     "classificacoes",
     classificacoesMock,
@@ -117,13 +125,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [usandoBanco]);
 
   useEffect(() => {
-    if (!bancoRef.current) saveToStorage("fornecedores", fornecedores);
+    if (apiRemota || bancoRef.current) return;
+    saveToStorage("fornecedores", fornecedores);
   }, [fornecedores]);
   useEffect(() => {
-    if (!bancoRef.current) saveToStorage("produtos", produtos);
+    if (apiRemota || bancoRef.current) return;
+    saveToStorage("produtos", produtos);
   }, [produtos]);
   useEffect(() => {
-    if (!bancoRef.current) saveToStorage("clientes", clientes);
+    if (apiRemota || bancoRef.current) return;
+    saveToStorage("clientes", clientes);
   }, [clientes]);
 
   function salvarCadastro(caminho: string, id: string, body: unknown) {

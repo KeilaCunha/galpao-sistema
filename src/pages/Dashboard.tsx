@@ -228,7 +228,7 @@ export default function Dashboard() {
             {pode("cadastros") && (
               <div className="hidden items-center gap-1 md:flex">
                 <Link to="/fornecedores" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Produtores
+                  Fornecedores
                 </Link>
                 <Link to="/produtos" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
                   Produtos

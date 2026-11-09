@@ -101,7 +101,7 @@ export const ROTULOS_PERMISSAO: { chave: ChavePermissao; titulo: string; detalhe
   { chave: "sobras", titulo: "Sobras em estoque", detalhe: "Ver e vender o que ficou no galpão." },
   { chave: "porCliente", titulo: "Por cliente", detalhe: "Ver o que cada cliente levou no dia." },
   { chave: "relatorios", titulo: "Relatórios", detalhe: "Gerar PDF e baixar backup." },
-  { chave: "cadastros", titulo: "Cadastros", detalhe: "Incluir produtor, produto e cliente." },
+  { chave: "cadastros", titulo: "Cadastros", detalhe: "Incluir fornecedor, produto e cliente." },
 ];
 
 export const ROTULOS_COLUNA_FOLHA: { chave: ChaveColunaFolha; titulo: string; detalhe: string }[] = [

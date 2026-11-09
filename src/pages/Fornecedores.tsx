@@ -128,6 +128,7 @@ export default function Fornecedores() {
         onSubmit={handleSubmit}
         initialValues={editing ?? undefined}
         modalTitle={editing ? "Editar fornecedor" : "Novo fornecedor"}
+        soNomeObrigatorio
       />
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title="Detalhes do fornecedor" size="md">

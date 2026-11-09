@@ -31,6 +31,7 @@ interface ContatoFormModalProps {
   initialValues?: ContatoFormValues;
   modalTitle: string;
   nomeLabel?: string;
+  soNomeObrigatorio?: boolean;
 }
 
 type FormErrors = Partial<Record<keyof ContatoFormValues, string>>;
@@ -42,6 +43,7 @@ export function ContatoFormModal({
   initialValues,
   modalTitle,
   nomeLabel = "Nome ou razão social",
+  soNomeObrigatorio = false,
 }: ContatoFormModalProps) {
   const [values, setValues] = useState<ContatoFormValues>(EMPTY_VALUES);
   const [errors, setErrors] = useState<FormErrors>({});
@@ -59,13 +61,15 @@ export function ContatoFormModal({
 
   function validate(): boolean {
     const nextErrors: FormErrors = {};
-    if (!values.nome.trim()) nextErrors.nome = "Informe o nome ou razão social.";
-    if (!values.documento.trim()) nextErrors.documento = "Informe o CPF ou CNPJ.";
-    if (!values.telefone.trim()) nextErrors.telefone = "Informe um telefone para contato.";
-    if (values.email.trim() && !/^\S+@\S+\.\S+$/.test(values.email.trim())) {
-      nextErrors.email = "Informe um e-mail válido.";
+    if (!values.nome.trim()) nextErrors.nome = "Informe o nome.";
+    if (!soNomeObrigatorio) {
+      if (!values.documento.trim()) nextErrors.documento = "Informe o CPF ou CNPJ.";
+      if (!values.telefone.trim()) nextErrors.telefone = "Informe um telefone para contato.";
+      if (!values.cidade.trim()) nextErrors.cidade = "Informe a cidade.";
+      if (values.email.trim() && !/^\S+@\S+\.\S+$/.test(values.email.trim())) {
+        nextErrors.email = "Informe um e-mail válido.";
+      }
     }
-    if (!values.cidade.trim()) nextErrors.cidade = "Informe a cidade.";
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   }
@@ -101,7 +105,7 @@ export function ContatoFormModal({
           </div>
           <Input
             label="CPF/CNPJ"
-            required
+            required={!soNomeObrigatorio}
             value={values.documento}
             onChange={(e) => updateField("documento", maskDocumento(e.target.value))}
             error={errors.documento}
@@ -109,7 +113,7 @@ export function ContatoFormModal({
           />
           <Input
             label="Telefone"
-            required
+            required={!soNomeObrigatorio}
             value={values.telefone}
             onChange={(e) => updateField("telefone", maskTelefone(e.target.value))}
             error={errors.telefone}
@@ -125,7 +129,7 @@ export function ContatoFormModal({
           />
           <Input
             label="Cidade"
-            required
+            required={!soNomeObrigatorio}
             value={values.cidade}
             onChange={(e) => updateField("cidade", e.target.value)}
             error={errors.cidade}

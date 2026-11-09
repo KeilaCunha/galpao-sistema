@@ -81,24 +81,6 @@ export default function Produtos() {
 
   const columns: DataTableColumn<Produto>[] = [
     { header: "Nome do produto", render: (p) => <span className="font-medium text-neutral-800">{p.nome}</span> },
-    {
-      header: "Tipos",
-      render: (p) =>
-        (p.tipos ?? []).length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {(p.tipos ?? []).map((t) => (
-              <span
-                key={t}
-                className="rounded-full border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span className="text-neutral-400">—</span>
-        ),
-    },
     { header: "Unidade", render: (p) => labelUnidade(p.unidade) },
     {
       header: "Estoque atual",
@@ -109,7 +91,6 @@ export default function Produtos() {
         </div>
       ),
     },
-    { header: "Estoque mínimo", render: (p) => formatQuantidade(p.estoqueMinimo, labelUnidade(p.unidade)) },
     { header: "Situação", render: (p) => <SituacaoBadge situacao={p.situacao} /> },
     {
       header: "Ações",
@@ -183,29 +164,6 @@ export default function Produtos() {
                 {
                   label: "Estoque atual",
                   value: formatQuantidade(viewing.estoqueAtual, labelUnidade(viewing.unidade)),
-                },
-                {
-                  label: "Estoque mínimo",
-                  value: formatQuantidade(viewing.estoqueMinimo, labelUnidade(viewing.unidade)),
-                },
-                {
-                  label: "Tipos / Grades",
-                  fullWidth: true,
-                  value:
-                    (viewing.tipos ?? []).length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {(viewing.tipos ?? []).map((t) => (
-                          <span
-                            key={t}
-                            className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-700"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-neutral-400">Nenhum tipo cadastrado</span>
-                    ),
                 },
                 { label: "Descrição", value: viewing.descricao, fullWidth: true },
               ]}

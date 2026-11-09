@@ -60,7 +60,6 @@ export default function Estoque() {
     { header: "Produto", render: (p) => <span className="font-medium text-neutral-800">{p.nome}</span> },
     { header: "Unidade", render: (p) => labelUnidade(p.unidade) },
     { header: "Quantidade atual", render: (p) => formatQuantidade(p.estoqueAtual, labelUnidade(p.unidade)) },
-    { header: "Estoque mínimo", render: (p) => formatQuantidade(p.estoqueMinimo, labelUnidade(p.unidade)) },
     { header: "Situação", render: (p) => <EstoqueBadge situacao={situacaoEstoqueProduto(p)} /> },
     {
       header: "Ações",

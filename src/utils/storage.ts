@@ -24,6 +24,16 @@ export function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
+/** Apaga chaves do navegador. Usado quando o sistema passa a ler só o banco. */
+export function removeFromStorage(...keys: string[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (const key of keys) window.localStorage.removeItem(PREFIX + key);
+  } catch {
+    /* modo privado */
+  }
+}
+
 /**
  * Como `useState`, mas carrega o valor inicial do navegador (se existir) e salva automaticamente
  * a cada alteração. Assim, os dados sobrevivem a recarregar a página ou fechar e abrir o navegador —

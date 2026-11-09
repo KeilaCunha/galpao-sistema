@@ -124,6 +124,7 @@ export default function Clientes() {
         onSubmit={handleSubmit}
         initialValues={editing ?? undefined}
         modalTitle={editing ? "Editar cliente" : "Novo cliente"}
+        soNomeObrigatorio
       />
 
       <Modal open={!!viewing} onClose={() => setViewing(null)} title="Detalhes do cliente" size="md">
