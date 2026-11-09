@@ -49,20 +49,6 @@ interface DataContextValue {
   removeAnotacao: (id: string) => void;
 }
 
-function cadastroReal<T extends { id: string }>(itens: T[]): T[] {
-  return itens.filter((item) => !/^(forn|prod|cli)-\d+$/.test(item.id));
-}
-
-function unirPorId<T extends { id: string }>(remoto: T[], local: T[]): { todos: T[]; novos: T[] } {
-  const porId = new Map(remoto.map((item) => [item.id, item]));
-  const novos: T[] = [];
-  for (const item of local) {
-    if (porId.has(item.id)) continue;
-    porId.set(item.id, item);
-    novos.push(item);
-  }
-  return { todos: [...porId.values()], novos };
-}
 
 const DataContext = createContext<DataContextValue | undefined>(undefined);
 
@@ -80,12 +66,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [anotacoes, setAnotacoes] = useLocalStorageState<Anotacao[]>("anotacoes", anotacoesMock);
   const bancoRef = useRef(false);
   const [usandoBanco, setUsandoBanco] = useState(false);
-  const fornRef = useRef(fornecedores);
-  const prodRef = useRef(produtos);
-  const cliRef = useRef(clientes);
-  fornRef.current = fornecedores;
-  prodRef.current = produtos;
-  cliRef.current = clientes;
 
   useEffect(() => {
     const precisaNormalizar = produtos.some((p) => (p.tipos ?? []).some((t) => t.includes(",")));
@@ -114,24 +94,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ]);
         if (cancelado) return;
         bancoRef.current = true;
-
-        const locaisForn = cadastroReal(fornRef.current);
-        const locaisProd = cadastroReal(prodRef.current);
-        const locaisCli = cadastroReal(cliRef.current);
-
-        const forn = unirPorId(fornApi, locaisForn);
-        const prod = unirPorId(prodApi, locaisProd);
-        const cli = unirPorId(cliApi, locaisCli);
-
-        await Promise.all([
-          ...forn.novos.map((item) => api.put(`/fornecedores/${item.id}`, item)),
-          ...prod.novos.map((item) => api.put(`/produtos/${item.id}`, item)),
-          ...cli.novos.map((item) => api.put(`/clientes/${item.id}`, item)),
-        ]);
-
-        setFornecedores(forn.todos);
-        setProdutos(prod.todos);
-        setClientes(cli.todos);
+        setFornecedores(fornApi);
+        setProdutos(prodApi);
+        setClientes(cliApi);
         if (!cancelado) setUsandoBanco(true);
       } catch {
         bancoRef.current = false;

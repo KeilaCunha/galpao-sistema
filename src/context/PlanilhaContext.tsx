@@ -142,10 +142,9 @@ function mesclarPedidos(
   pendentes: Set<string>,
 ): PedidoCliente[] {
   const porId = new Map(remoto.map((pedido) => [pedido.id, pedido]));
-  for (const pedido of local) {
-    if (pendentes.has(pedido.id) || (!porId.has(pedido.id) && pedidoPersistivel(pedido))) {
-      porId.set(pedido.id, pedido);
-    }
+  for (const id of pendentes) {
+    const localPedido = local.find((pedido) => pedido.id === id);
+    if (localPedido) porId.set(id, localPedido);
   }
   return [...porId.values()];
 }
@@ -195,30 +194,11 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         bancoRef.current = true;
         registrarVersao(dados.versao);
         const doBanco = dados.entradas ?? [];
-        const idsBanco = new Set(doBanco.map((entrada) => entrada.id));
-        const atuais = entradasRef.current;
-        const novosLocais = atuais
-          .filter(entradaPersistivel)
-          .filter((entrada) => !idsBanco.has(entrada.id));
-        const rascunhos = atuais.filter(
-          (entrada) => !entradaPersistivel(entrada) && !idsBanco.has(entrada.id),
-        );
         const pedidosBanco = dados.pedidos ?? [];
-        const idsPedidosBanco = new Set(pedidosBanco.map((pedido) => pedido.id));
-        const novosPedidos = pedidosRef.current
-          .filter(pedidoPersistivel)
-          .filter((pedido) => !idsPedidosBanco.has(pedido.id));
-        if (novosLocais.length > 0) {
-          await Promise.all(novosLocais.map((entrada) => api.put(`/entradas/${entrada.id}`, paraApi(entrada))));
-        }
-        if (novosPedidos.length > 0) {
-          await Promise.all(novosPedidos.map((pedido) => api.put(`/pedidos/${pedido.id}`, pedido)));
-        }
         if (!cancelado) {
-          const unidas = [...doBanco, ...novosLocais, ...rascunhos];
-          setEntradas(completarLinhasVazias(unidas, toISODate()));
-          setPedidos([...pedidosBanco, ...novosPedidos]);
-          registrarGravadas(unidas);
+          setEntradas(completarLinhasVazias(doBanco, toISODate()));
+          setPedidos(pedidosBanco);
+          registrarGravadas(doBanco);
           setStatusBanco("vivo");
         }
       } catch {
