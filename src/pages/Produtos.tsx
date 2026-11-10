@@ -1,6 +1,8 @@
 import { Package, Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CadastroContadores } from "../components/cadastro/CadastroContadores";
+import { CadastroHistorico } from "../components/cadastro/CadastroHistorico";
 import { ProdutoFormModal, type ProdutoFormValues } from "../components/forms/ProdutoFormModal";
 import { Select } from "../components/ui/Select";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -116,6 +118,8 @@ export default function Produtos() {
         }
       />
 
+      <CadastroContadores />
+
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="sm:max-w-sm sm:flex-1">
           <SearchInput value={search} onChange={setSearch} placeholder="Pesquisar produto..." />
@@ -136,6 +140,8 @@ export default function Produtos() {
         emptyTitle="Nenhum produto encontrado"
         emptyDescription="Ajuste a pesquisa ou os filtros, ou cadastre um novo produto."
       />
+
+      <CadastroHistorico />
 
       <ProdutoFormModal
         open={formOpen}

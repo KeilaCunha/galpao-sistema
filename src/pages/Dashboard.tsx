@@ -10,6 +10,7 @@ import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
 import { useAuth } from "../context/AuthContext";
+import { useData } from "../context/DataContext";
 import { usePlanilha } from "../context/PlanilhaContext";
 import { abrevMercadoria } from "../utils/abrev";
 import {
@@ -93,6 +94,7 @@ export default function Dashboard() {
     statusBanco,
   } = usePlanilha();
   const { pode, precisaSetup } = useAuth();
+  const { fornecedores, produtos, clientes } = useData();
 
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
@@ -228,13 +230,13 @@ export default function Dashboard() {
             {pode("cadastros") && (
               <div className="hidden items-center gap-1 md:flex">
                 <Link to="/fornecedores" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Fornecedores
+                  Fornecedores ({fornecedores.length})
                 </Link>
                 <Link to="/produtos" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Produtos
+                  Produtos ({produtos.length})
                 </Link>
                 <Link to="/clientes" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Clientes
+                  Clientes ({clientes.length})
                 </Link>
               </div>
             )}

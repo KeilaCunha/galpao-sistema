@@ -88,7 +88,14 @@ export function PedidoModal({ open, data, clienteInicial = "", onClose, onSalvar
             {cliente}
           </div>
         </FieldWrapper>
-        <Autocomplete label="Mercadoria" value={mercadoria} onChange={setMercadoria} sugestoes={nomesProdutos} required />
+        <Autocomplete
+          label="Mercadoria"
+          tipoItem="produto"
+          value={mercadoria}
+          onChange={setMercadoria}
+          sugestoes={nomesProdutos}
+          required
+        />
         <SelectField
           label="Classificação"
           value={tipos.some((opcao) => opcao.value === tipo) ? tipo : "BOM"}

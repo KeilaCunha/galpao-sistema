@@ -107,21 +107,23 @@ export function SaidaModal({
         {aba === "cliente" && (
           <Autocomplete
             label="Cliente"
+            tipoItem="cliente"
             required
             value={cliente}
             onChange={setCliente}
             sugestoes={clientes}
-            placeholder="Ex: SE"
+            placeholder="Selecione o cliente"
           />
         )}
 
         <Autocomplete
           label="Mercadoria"
+          tipoItem="produto"
           required
           value={mercadoria}
           onChange={setMercadoria}
           sugestoes={mercadorias}
-          placeholder="Ex: Abobrinha"
+          placeholder="Selecione a mercadoria"
           hint={disponivel !== null ? `${disponivel} cx em estoque` : undefined}
         />
 

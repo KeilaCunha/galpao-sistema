@@ -1,6 +1,8 @@
 import { Plus, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CadastroContadores } from "../components/cadastro/CadastroContadores";
+import { CadastroHistorico } from "../components/cadastro/CadastroHistorico";
 import { ContatoFormModal, type ContatoFormValues } from "../components/forms/ContatoFormModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Button } from "../components/ui/Button";
@@ -106,6 +108,8 @@ export default function Clientes() {
         }
       />
 
+      <CadastroContadores />
+
       <div className="mb-4 max-w-sm">
         <SearchInput value={search} onChange={setSearch} placeholder="Pesquisar por nome, telefone ou CPF/CNPJ..." />
       </div>
@@ -117,6 +121,8 @@ export default function Clientes() {
         emptyTitle="Nenhum cliente encontrado"
         emptyDescription="Ajuste a pesquisa ou cadastre um novo cliente."
       />
+
+      <CadastroHistorico />
 
       <ContatoFormModal
         open={formOpen}

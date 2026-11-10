@@ -7,33 +7,12 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { TelinhaColunasFolha, resumoColunasFolha } from "../components/config/TelinhaColunasFolha";
 import { permissoesIniciais, useAuth, visibilidadeIniciais } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { ehEventoVisivel, fraseAuditoria, type EventoAuditoria } from "../utils/auditoria";
 import type { ChavePermissao, Permissoes, Travas, Usuario, VisibilidadeFolha } from "../utils/permissoes";
 import { COLUNAS_FOLHA_OPERADOR, mesclarColunasFolha, ROTULOS_PERMISSAO, ROTULOS_TRAVA } from "../utils/permissoes";
+import { formatDateTime } from "../utils/format";
 
 type Aba = "pessoas" | "colunas" | "travas" | "historico";
-
-interface EventoAuditoria {
-  id: string;
-  criadoEm: string;
-  usuarioNome: string;
-  autorizadoPorNome?: string | null;
-  acao: string;
-  alvo?: string | null;
-  detalhe?: Record<string, unknown>;
-}
-
-const ROTULOS_ACAO: Record<string, string> = {
-  setup: "Cadastrou o primeiro responsável",
-  login: "Entrou no sistema",
-  criar_usuario: "Cadastrou pessoa",
-  alterar_usuario: "Alterou pessoa",
-  alterar_travas: "Mudou as travas",
-  autorizar: "Liberou alteração",
-  lancar_entrada: "Lançou na folha",
-  alterar_entrada: "Alterou lançamento",
-  apagar_entrada: "Apagou lançamento",
-  salvar_cadastro: "Salvou cadastro",
-};
 
 export default function Configuracoes() {
   const { usuario, precisaSetup, setup, ehResponsavel, recarregar, travas, modoLivre } = useAuth();
@@ -50,8 +29,26 @@ export default function Configuracoes() {
   useEffect(() => {
     if (!ehResponsavel) return;
     void api.get<Usuario[]>("/usuarios").then(setPessoas).catch(() => setPessoas([]));
-    void api.get<EventoAuditoria[]>("/auditoria").then(setHistorico).catch(() => setHistorico([]));
   }, [ehResponsavel]);
+
+  useEffect(() => {
+    if (!ehResponsavel || aba !== "historico") return;
+    let cancelado = false;
+    async function carregar() {
+      try {
+        const lista = await api.get<EventoAuditoria[]>("/auditoria?limite=300");
+        if (!cancelado) setHistorico(lista.filter(ehEventoVisivel));
+      } catch {
+        if (!cancelado) setHistorico([]);
+      }
+    }
+    void carregar();
+    const timer = window.setInterval(() => void carregar(), 4000);
+    return () => {
+      cancelado = true;
+      window.clearInterval(timer);
+    };
+  }, [ehResponsavel, aba]);
 
   if (precisaSetup) {
     return <PrimeiroResponsavel onCriado={() => void recarregar()} setup={setup} />;
@@ -71,7 +68,7 @@ export default function Configuracoes() {
     <div className="mx-auto w-full max-w-[1100px] px-4 py-6 sm:px-6">
       <PageHeader
         title="Administração"
-        description="Quem entra, o que cada um vê na folha, o que pode fazer e o que trava depois do lançamento. O histórico guarda quem mudou o quê."
+        description="Quem entra, o que cada um vê na folha, o que pode fazer e o que trava depois do lançamento. O histórico mostra quem cadastrou ou alterou cada coisa."
       />
 
       {modoLivre && (
@@ -177,55 +174,19 @@ export default function Configuracoes() {
           {historico.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-neutral-400">Ainda não há registros.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">
-                  <th className="px-4 py-2.5">Quando</th>
-                  <th className="px-4 py-2.5">Quem</th>
-                  <th className="px-4 py-2.5">Ação</th>
-                  <th className="px-4 py-2.5">Detalhe</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historico.map((evento) => (
-                  <tr key={evento.id} className="border-t border-neutral-100">
-                    <td className="whitespace-nowrap px-4 py-2.5 text-xs text-neutral-500">
-                      {new Date(evento.criadoEm).toLocaleString("pt-BR")}
-                    </td>
-                    <td className="px-4 py-2.5 font-medium text-neutral-800">
-                      {evento.usuarioNome}
-                      {evento.autorizadoPorNome ? (
-                        <span className="block text-[11px] font-normal text-neutral-400">
-                          liberado por {evento.autorizadoPorNome}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-2.5">{ROTULOS_ACAO[evento.acao] ?? evento.acao}</td>
-                    <td className="px-4 py-2.5 text-xs text-neutral-500">
-                      {resumoDetalhe(evento)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ul className="divide-y divide-neutral-100">
+              {historico.map((evento) => (
+                <li key={evento.id} className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
+                  <p className="text-sm text-neutral-800">{fraseAuditoria(evento)}</p>
+                  <p className="shrink-0 text-xs text-neutral-400">{formatDateTime(evento.criadoEm)}</p>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
     </div>
   );
-}
-
-function resumoDetalhe(evento: EventoAuditoria): string {
-  const d = evento.detalhe ?? {};
-  if (typeof d.nome === "string") return d.nome;
-  if (typeof d.produtor === "string" && d.produtor) {
-    return [d.produtor, d.mercadoria].filter(Boolean).join(" · ");
-  }
-  if (Array.isArray(d.campos)) return `campos: ${(d.campos as string[]).join(", ")}`;
-  if (Array.isArray(d.mudancas)) {
-    return (d.mudancas as { campo?: string }[]).map((m) => m.campo).filter(Boolean).join(", ");
-  }
-  return "";
 }
 
 function PrimeiroResponsavel({

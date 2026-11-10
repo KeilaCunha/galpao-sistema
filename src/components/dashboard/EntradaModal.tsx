@@ -51,11 +51,12 @@ export function EntradaModal({ open, onClose, onSubmit, produtores, mercadorias 
       <div className="flex flex-col gap-4">
         <Autocomplete
           label="Produtor"
+          tipoItem="fornecedor"
           required
           value={form.produtor}
           onChange={(produtor) => setForm((p) => ({ ...p, produtor }))}
           sugestoes={produtores}
-          placeholder="Ex: Nielso"
+          placeholder="Selecione o fornecedor"
         />
         <Input
           label="Caixas"
@@ -68,11 +69,12 @@ export function EntradaModal({ open, onClose, onSubmit, produtores, mercadorias 
         />
         <Autocomplete
           label="Mercadoria"
+          tipoItem="produto"
           required
           value={form.mercadoria}
           onChange={(mercadoria) => setForm((p) => ({ ...p, mercadoria }))}
           sugestoes={mercadorias}
-          placeholder="Ex: Abobrinha"
+          placeholder="Selecione a mercadoria"
         />
         <Input
           label="Preço"

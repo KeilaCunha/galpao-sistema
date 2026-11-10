@@ -79,15 +79,13 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
     garantirDestinosDoDia,
   ]);
 
-  const clientesSugestao = useMemo(() => {
-    const nomes = new Set(clientes.map((c) => c.nome));
-    for (const e of entradas) {
-      for (const d of e.destinos ?? []) {
-        if (destinoPersistivel(d) && d.cliente.trim() && !tipoEhEstoque(d.tipo)) nomes.add(d.cliente);
-      }
-    }
-    return [...nomes].sort();
-  }, [clientes, entradas]);
+  const clientesSugestao = useMemo(
+    () =>
+      [...new Set(clientes.map((c) => c.nome.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [clientes],
+  );
 
   return (
     <>
@@ -133,6 +131,7 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                             />
                           ) : (
                             <Autocomplete
+                              tipoItem="cliente"
                               value={destino.cliente}
                               onChange={(cliente) =>
                                 updateDestino(atual.id, destino.id, { cliente, data: dataDestino })

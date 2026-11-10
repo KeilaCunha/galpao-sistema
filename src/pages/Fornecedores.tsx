@@ -1,6 +1,8 @@
 import { Plus, Truck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CadastroContadores } from "../components/cadastro/CadastroContadores";
+import { CadastroHistorico } from "../components/cadastro/CadastroHistorico";
 import { ContatoFormModal, type ContatoFormValues } from "../components/forms/ContatoFormModal";
 import { PageHeader } from "../components/layout/PageHeader";
 import { Button } from "../components/ui/Button";
@@ -110,6 +112,8 @@ export default function Fornecedores() {
         }
       />
 
+      <CadastroContadores />
+
       <div className="mb-4 max-w-sm">
         <SearchInput value={search} onChange={setSearch} placeholder="Pesquisar por nome, telefone ou documento..." />
       </div>
@@ -121,6 +125,8 @@ export default function Fornecedores() {
         emptyTitle="Nenhum fornecedor encontrado"
         emptyDescription="Ajuste a pesquisa ou cadastre um novo fornecedor."
       />
+
+      <CadastroHistorico />
 
       <ContatoFormModal
         open={formOpen}

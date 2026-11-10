@@ -61,6 +61,7 @@ export function LancamentosPainel({
                   <td className="p-1">
                     <Autocomplete
                       compact
+                      tipoItem="fornecedor"
                       autoFocus={
                         index === entradas.length - 1 &&
                         !entrada.produtor &&
@@ -87,6 +88,7 @@ export function LancamentosPainel({
                   <td className="p-1">
                     <Autocomplete
                       compact
+                      tipoItem="produto"
                       value={entrada.mercadoria}
                       onChange={(mercadoria) => onUpdateEntrada(entrada.id, { mercadoria })}
                       sugestoes={mercadorias}
@@ -182,6 +184,7 @@ export function LancamentosPainel({
                     ) : (
                       <Autocomplete
                         compact
+                        tipoItem="cliente"
                         autoFocus={
                           index === saidas.length - 1 &&
                           !saida.cliente &&
@@ -197,6 +200,7 @@ export function LancamentosPainel({
                   <td className="p-1">
                     <Autocomplete
                       compact
+                      tipoItem="produto"
                       value={saida.mercadoria}
                       onChange={(mercadoria) => onUpdateSaida(saida.id, { mercadoria })}
                       sugestoes={mercadorias}

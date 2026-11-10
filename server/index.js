@@ -419,8 +419,8 @@ app.put("/api/config/travas", ...soResponsavel, wrap(async (req, res) => {
   res.json(travas);
 }));
 
-app.get("/api/auditoria", ...soResponsavel, wrap(async (req, res) => {
-  const limite = Math.min(200, Math.max(20, Number(req.query.limite) || 80));
+app.get("/api/auditoria", ...autenticado, wrap(async (req, res) => {
+  const limite = Math.min(300, Math.max(20, Number(req.query.limite) || 200));
   const resultado = await query(
     `SELECT id, criado_em, usuario_nome, autorizado_por_nome, acao, alvo, detalhe
      FROM auditoria ORDER BY criado_em DESC LIMIT $1`,
@@ -690,23 +690,40 @@ function rotasCadastro(caminho, tabela, mapRow, paraLinha) {
   }));
 
   app.put(`/api/${caminho}/:id`, ...autenticado, exigirPermissao("cadastros"), wrap(async (req, res) => {
-    const { texto, valores } = paraLinha(req.params.id, req.body ?? {});
+    const id = req.params.id;
+    const existente = await query(`SELECT nome FROM ${tabela} WHERE id = $1`, [id]);
+    const eraNovo = existente.rows.length === 0;
+    const { texto, valores } = paraLinha(id, req.body ?? {});
     await query(texto, valores);
     await tocarVersao();
     if (req.usuario) {
       await gravarAuditoria({
         usuario: req.usuario,
-        acao: "salvar_cadastro",
-        alvo: `${caminho}:${req.params.id}`,
-        detalhe: { nome: req.body?.nome },
+        acao: eraNovo ? "cadastrar" : "alterar_cadastro",
+        alvo: `${caminho}:${id}`,
+        detalhe: {
+          tipo: caminho,
+          nome: req.body?.nome ?? existente.rows[0]?.nome ?? "",
+          nomeAnterior: eraNovo ? undefined : existente.rows[0]?.nome,
+        },
       });
     }
-    res.json({ ok: true, id: req.params.id });
+    res.json({ ok: true, id });
   }));
 
   app.delete(`/api/${caminho}/:id`, ...autenticado, exigirPermissao("cadastros"), wrap(async (req, res) => {
-    await query(`DELETE FROM ${tabela} WHERE id = $1`, [req.params.id]);
+    const id = req.params.id;
+    const existente = await query(`SELECT nome FROM ${tabela} WHERE id = $1`, [id]);
+    await query(`DELETE FROM ${tabela} WHERE id = $1`, [id]);
     await tocarVersao();
+    if (req.usuario) {
+      await gravarAuditoria({
+        usuario: req.usuario,
+        acao: "apagar_cadastro",
+        alvo: `${caminho}:${id}`,
+        detalhe: { tipo: caminho, nome: existente.rows[0]?.nome ?? "" },
+      });
+    }
     res.json({ ok: true });
   }));
 }

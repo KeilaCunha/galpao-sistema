@@ -85,11 +85,13 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
     return () => observador.disconnect();
   }, [data, linhas.length, garantirLinhasDoDia, filtrando]);
 
-  const produtores = useMemo(() => {
-    const nomes = new Set(fornecedores.map((f) => f.nome.trim()).filter(Boolean));
-    for (const e of entradas) if (e.produtor.trim()) nomes.add(e.produtor.trim());
-    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [fornecedores, entradas]);
+  const produtores = useMemo(
+    () =>
+      [...new Set(fornecedores.map((f) => f.nome.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [fornecedores],
+  );
 
   function travado(id: string, campo: CampoTrava) {
     return campoTravado({
@@ -102,14 +104,18 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
     });
   }
 
-  const mercadorias = useMemo(() => {
-    const nomes = new Set<string>();
-    for (const p of produtos.filter((item) => item.situacao === "ativo")) {
-      if (p.nome.trim()) nomes.add(p.nome.trim());
-    }
-    for (const e of entradas) if (e.mercadoria.trim()) nomes.add(e.mercadoria.trim());
-    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [produtos, entradas]);
+  const mercadorias = useMemo(
+    () =>
+      [
+        ...new Set(
+          produtos
+            .filter((item) => item.situacao === "ativo")
+            .map((item) => item.nome.trim())
+            .filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b, "pt-BR")),
+    [produtos],
+  );
 
   const entradaModal = editandoId ? entradas.find((e) => e.id === editandoId) : undefined;
 
@@ -177,6 +183,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                     <CampoTravado travado={travado(linha.id, "produtor")} onLiberar={() => setPedido({ id: linha.id, campos: ["produtor"] })}>
                       <Autocomplete
                         compact
+                        tipoItem="fornecedor"
                         value={linha.produtor}
                         onChange={(produtor) => updateEntrada(linha.id, { produtor })}
                         sugestoes={produtores}
@@ -247,6 +254,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                     <CampoTravado travado={travado(linha.id, "mercadoria")} onLiberar={() => setPedido({ id: linha.id, campos: ["mercadoria"] })}>
                       <Autocomplete
                         compact
+                        tipoItem="produto"
                         value={linha.mercadoria}
                         onChange={(mercadoria) => updateEntrada(linha.id, { mercadoria })}
                         sugestoes={mercadorias}
