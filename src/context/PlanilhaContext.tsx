@@ -140,13 +140,33 @@ function mesclarEntradas(
   remoto: EntradaLancamento[],
   pendentes: Set<string>,
 ): EntradaLancamento[] {
-  const porId = new Map(remoto.map((entrada) => [entrada.id, entrada]));
-  for (const id of pendentes) {
-    const localEntrada = local.find((entrada) => entrada.id === id);
-    if (localEntrada) porId.set(id, localEntrada);
+  const remotoPorId = new Map(remoto.map((entrada) => [entrada.id, entrada]));
+  const vistos = new Set<string>();
+  const resultado: EntradaLancamento[] = [];
+
+  for (const entrada of local) {
+    if (pendentes.has(entrada.id)) {
+      resultado.push(entrada);
+      vistos.add(entrada.id);
+      continue;
+    }
+    const remota = remotoPorId.get(entrada.id);
+    if (remota) {
+      resultado.push(remota);
+      vistos.add(entrada.id);
+      continue;
+    }
+    if (!entradaPersistivel(entrada)) {
+      resultado.push(entrada);
+      vistos.add(entrada.id);
+    }
   }
-  const vazias = local.filter((entrada) => !entradaPersistivel(entrada) && !porId.has(entrada.id));
-  return [...porId.values(), ...vazias];
+
+  for (const entrada of remoto) {
+    if (!vistos.has(entrada.id)) resultado.push(entrada);
+  }
+
+  return resultado;
 }
 
 function mesclarPedidos(

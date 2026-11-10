@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FieldWrapper } from "./FormField";
 
@@ -38,8 +38,10 @@ export function Autocomplete({
   autoFocus,
 }: AutocompleteProps) {
   const [aberto, setAberto] = useState(false);
+  const [indice, setIndice] = useState(-1);
   const [posicao, setPosicao] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
 
   const termo = value.trim();
   const busca = semAcento(termo);
@@ -58,6 +60,21 @@ export function Autocomplete({
     : [];
 
   const mostrar = aberto && filtradas.length > 0;
+
+  useEffect(() => {
+    setIndice(-1);
+  }, [busca]);
+
+  useLayoutEffect(() => {
+    if (!mostrar) return;
+    const ativo = listaRef.current?.children[indice] as HTMLElement | undefined;
+    ativo?.scrollIntoView({ block: "nearest" });
+  }, [indice, mostrar]);
+
+  function escolher(item: string) {
+    onChange(item);
+    setAberto(false);
+  }
 
   useLayoutEffect(() => {
     if (!mostrar) return;
@@ -96,6 +113,23 @@ export function Autocomplete({
           if (value.trim()) setAberto(true);
         }}
         onBlur={() => setTimeout(() => setAberto(false), 150)}
+        onKeyDown={(e) => {
+          if (!mostrar) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setIndice((atual) => (atual < 0 ? 0 : Math.min(atual + 1, filtradas.length - 1)));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setIndice((atual) => (atual <= 0 ? filtradas.length - 1 : atual - 1));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            const escolhido = indice >= 0 ? filtradas[indice] : filtradas[0];
+            if (escolhido) escolher(escolhido);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setAberto(false);
+          }
+        }}
         placeholder={placeholder}
         disabled={disabled}
       />
@@ -103,19 +137,24 @@ export function Autocomplete({
         posicao &&
         createPortal(
           <div
-            className="fixed z-[80] overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl"
+            ref={listaRef}
+            className="fixed z-[80] max-h-56 overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-xl"
             style={{ top: posicao.top, left: posicao.left, width: posicao.width }}
           >
-            {filtradas.map((item) => (
+            {filtradas.map((item, i) => (
               <button
                 key={item}
                 type="button"
+                onMouseEnter={() => setIndice(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  onChange(item);
-                  setAberto(false);
+                  escolher(item);
                 }}
-                className="flex w-full px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-brand-50"
+                className={
+                  i === indice
+                    ? "flex w-full bg-brand-50 px-3 py-2 text-left text-sm text-neutral-800"
+                    : "flex w-full px-3 py-2 text-left text-sm text-neutral-700 transition hover:bg-brand-50"
+                }
               >
                 {item}
               </button>
