@@ -43,6 +43,7 @@ function estilos(): string {
       .card span { color: #737373; font-size: 10px; text-transform: uppercase; }
       .grupo { margin-bottom: 18px; page-break-inside: avoid; }
       .grupo h3 { margin: 0 0 6px; font-size: 14px; }
+      .obs { color: #525252; font-size: 11px; font-style: italic; margin-top: 2px; }
       .vazio { color: #737373; }
     </style>
   `;
@@ -92,6 +93,27 @@ export function imprimirRelatorioOperacao(relatorio: RelatorioOperacao) {
             <tbody>${linhasDia}</tbody>
           </table>`
     }
+    ${
+      relatorio.observacoes.length === 0
+        ? ""
+        : `<h2>Observações</h2>
+          <table>
+            <thead><tr><th>Data</th><th>Fornecedor</th><th>Mercadoria</th><th>Observação</th></tr></thead>
+            <tbody>
+              ${relatorio.observacoes
+                .map(
+                  (item) => `
+                <tr>
+                  <td>${esc(formatDate(item.data))}</td>
+                  <td>${esc(item.produtor)}</td>
+                  <td>${esc(item.mercadoria)}</td>
+                  <td>${esc(item.texto)}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>`
+    }
   `;
   abrirImpressao(titulo, corpo);
 }
@@ -105,7 +127,7 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor, verP
           (linha) => `
           <tr>
             <td>${esc(formatDate(linha.data))}</td>
-            <td>${esc(linha.mercadoria)}</td>
+            <td>${esc(linha.mercadoria)}${linha.observacao ? `<div class="obs">${esc(linha.observacao)}</div>` : ""}</td>
             <td class="num">${linha.veio}</td>
             <td class="num">${linha.boa}</td>
             <td class="num">${linha.fraca}</td>

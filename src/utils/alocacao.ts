@@ -310,6 +310,7 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
       preco: entrada.preco,
       precoFraco: entrada.precoFraco ?? null,
       destinos: destinosDa(entrada),
+      observacao: entrada.observacao,
     }));
 }
 

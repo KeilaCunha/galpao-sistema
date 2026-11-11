@@ -17,6 +17,7 @@ const pendentes = new Set<string>();
 let timer: number | null = null;
 let versaoLocal = -1;
 let ligado = false;
+let pausas = 0;
 
 export function marcarPendente(id: string) {
   pendentes.add(id);
@@ -30,8 +31,17 @@ export function idsPendentes(): Set<string> {
   return new Set(pendentes);
 }
 
+export function pausarSync() {
+  pausas += 1;
+}
+
+export function retomarSync() {
+  pausas = Math.max(0, pausas - 1);
+  if (pausas === 0) void tick();
+}
+
 async function tick() {
-  if (!ligado || pendentes.size > 0) return;
+  if (!ligado || pausas > 0 || pendentes.size > 0) return;
   try {
     const meta = await api.get<{ versao: number }>("/versao");
     if (meta.versao === versaoLocal) return;

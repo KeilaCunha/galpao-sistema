@@ -118,9 +118,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!usandoBanco) return;
     return ouvirSync((pacote) => {
-      setFornecedores(pacote.fornecedores);
-      setProdutos(pacote.produtos);
-      setClientes(pacote.clientes);
+      setFornecedores((atual) => (JSON.stringify(atual) === JSON.stringify(pacote.fornecedores) ? atual : pacote.fornecedores));
+      setProdutos((atual) => (JSON.stringify(atual) === JSON.stringify(pacote.produtos) ? atual : pacote.produtos));
+      setClientes((atual) => (JSON.stringify(atual) === JSON.stringify(pacote.clientes) ? atual : pacote.clientes));
     });
   }, [usandoBanco]);
 

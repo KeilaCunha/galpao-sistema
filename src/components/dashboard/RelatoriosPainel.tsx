@@ -220,6 +220,34 @@ function PreviewOperacao({ relatorio }: { relatorio: ReturnType<typeof montarRel
           </table>
         )}
       </section>
+
+      {relatorio.observacoes.length > 0 && (
+        <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+          <h3 className="border-b border-neutral-100 px-4 py-3 text-xs font-bold uppercase tracking-widest text-neutral-500">
+            Observações
+          </h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-neutral-50">
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Data</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Fornecedor</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Observação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {relatorio.observacoes.map((item, i) => (
+                <tr key={`${item.data}-${item.produtor}-${i}`} className="border-t border-neutral-100">
+                  <td className="px-4 py-2.5 font-medium text-neutral-800">{formatDate(item.data)}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{item.produtor}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{item.mercadoria}</td>
+                  <td className="px-4 py-2.5 text-neutral-700">{item.texto}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
     </>
   );
 }
@@ -276,7 +304,10 @@ function PreviewFornecedor({
               {grupo.linhas.map((linha, i) => (
                 <tr key={`${linha.data}-${linha.mercadoria}-${i}`} className="border-t border-neutral-100">
                   <td className="px-4 py-2.5 font-medium text-neutral-800">{formatDate(linha.data)}</td>
-                  <td className="px-4 py-2.5 text-neutral-600">{linha.mercadoria}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">
+                    <p>{linha.mercadoria}</p>
+                    {linha.observacao ? <p className="mt-0.5 text-xs italic text-neutral-500">{linha.observacao}</p> : null}
+                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{linha.veio}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-success-600">{linha.boa || "—"}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-warning-600">{linha.fraca || "—"}</td>

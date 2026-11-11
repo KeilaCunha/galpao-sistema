@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AutorizarModal } from "../auth/AutorizarModal";
 import { CampoTravado } from "../auth/CampoTravado";
 import { useAuth } from "../../context/AuthContext";
@@ -7,6 +7,7 @@ import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import { campoTravado } from "../../utils/permissoes";
 import type { EntradaLancamento } from "../../types";
+import { pausarSync, retomarSync } from "../../api/sync";
 import { destinosDaFolhaNoDia, destinosDoEstoqueNoDia, tipoPadraoDestino } from "../../utils/alocacao";
 import {
   ehTomate,
@@ -42,6 +43,8 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
   const { clientes } = useData();
   const { usuario, travas, modoLivre, estaLiberado } = useAuth();
   const [pedirDestinos, setPedirDestinos] = useState(false);
+  const garantirRef = useRef(garantirDestinosDoDia);
+  garantirRef.current = garantirDestinosDoDia;
 
   const atual = entrada ? entradas.find((e) => e.id === entrada.id) ?? entrada : undefined;
   const destinos = atual
@@ -63,21 +66,19 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
   );
 
   useEffect(() => {
+    if (!open) return;
+    pausarSync();
+    return () => retomarSync();
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !atual) return;
     const origem = origemEstoque ? "estoque" : "folha";
     const vazios = destinos.length - preenchidos;
     let alvo = Math.max(LINHAS_DESTINO_PADRAO, destinos.length);
     if (vazios === 0) alvo = Math.min(MAX_DESTINOS_DIA, destinos.length + 1);
-    garantirDestinosDoDia(atual.id, dataDestino, origem, alvo);
-  }, [
-    open,
-    atual?.id,
-    dataDestino,
-    origemEstoque,
-    destinos.length,
-    preenchidos,
-    garantirDestinosDoDia,
-  ]);
+    garantirRef.current(atual.id, dataDestino, origem, alvo);
+  }, [open, atual?.id, dataDestino, origemEstoque, destinos.length, preenchidos]);
 
   const clientesSugestao = useMemo(
     () =>

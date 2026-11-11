@@ -283,40 +283,54 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   )}
                   {vis.destino && (
                   <td className="px-1.5 py-1.5 align-top">
-                    <div
-                      className="flex min-h-[36px] cursor-pointer flex-wrap items-center gap-1 rounded-lg p-1 transition hover:bg-neutral-50"
-                      onClick={() => {
-                        if (pode("destinos")) setEditandoId(linha.id);
-                      }}
-                      title={pode("destinos") ? "Clique para informar destinos" : "Sem acesso aos destinos"}
-                    >
-                      <DestinoChips destinos={destinosDia} />
-                      {sobra > 0 && (
-                        <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
-                          {sobra} sobra
-                        </span>
-                      )}
-                      {destinosDia.length === 0 && sobra === 0 && (
-                        <span className="text-xs text-neutral-400">+ destino</span>
-                      )}
+                    <div className="flex min-h-[36px] items-start gap-1">
+                      <div
+                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-1 rounded-lg p-1 transition hover:bg-neutral-50"
+                        onClick={() => {
+                          if (pode("destinos")) setEditandoId(linha.id);
+                        }}
+                        title={pode("destinos") ? "Clique para informar destinos" : "Sem acesso aos destinos"}
+                      >
+                        <DestinoChips destinos={destinosDia} />
+                        {sobra > 0 && (
+                          <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
+                            {sobra} sobra
+                          </span>
+                        )}
+                        {destinosDia.length === 0 && sobra === 0 && (
+                          <span className="text-xs text-neutral-400">+ destino</span>
+                        )}
+                      </div>
+                      <CampoObservacao
+                        value={linha.observacao ?? ""}
+                        onChange={(observacao) => updateEntrada(linha.id, { observacao })}
+                      />
                     </div>
                   </td>
                   )}
                   <td className="p-1 text-center align-top">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const gravada = entradaGravada(linha.id);
-                        if (gravada && !ehResponsavel(usuario) && !modoLivre) {
-                          showInfo("Lançamento gravado: só o responsável apaga a linha.");
-                          return;
-                        }
-                        setExcluirId(linha.id);
-                      }}
-                      className="rounded-lg p-1.5 text-neutral-300 hover:bg-danger-50 hover:text-danger-500"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-start justify-end gap-1">
+                      {!vis.destino && (
+                        <CampoObservacao
+                          value={linha.observacao ?? ""}
+                          onChange={(observacao) => updateEntrada(linha.id, { observacao })}
+                        />
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const gravada = entradaGravada(linha.id);
+                          if (gravada && !ehResponsavel(usuario) && !modoLivre) {
+                            showInfo("Lançamento gravado: só o responsável apaga a linha.");
+                            return;
+                          }
+                          setExcluirId(linha.id);
+                        }}
+                        className="rounded-lg p-1.5 text-neutral-300 hover:bg-danger-50 hover:text-danger-500"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -417,6 +431,24 @@ function CampoFiltro({
         className="h-8 w-full rounded-md border border-neutral-200 bg-neutral-50 pl-7 pr-2 text-xs font-medium text-neutral-700 placeholder:font-normal placeholder:normal-case placeholder:text-neutral-400 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
       />
     </label>
+  );
+}
+
+function CampoObservacao({ value, onChange }: { value: string; onChange: (valor: string) => void }) {
+  const preenchida = Boolean(value.trim());
+  return (
+    <input
+      className={`h-9 w-[4.5rem] shrink-0 rounded-md border px-1.5 text-xs font-medium outline-none placeholder:font-normal ${
+        preenchida
+          ? "border-amber-400 bg-amber-100 text-neutral-900"
+          : "border-amber-300 bg-amber-50 text-neutral-800 placeholder:text-amber-800/55"
+      } focus:border-amber-500 focus:bg-amber-100 focus:ring-2 focus:ring-amber-200`}
+      placeholder="Obs"
+      title="Observação desta carga"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+    />
   );
 }
 

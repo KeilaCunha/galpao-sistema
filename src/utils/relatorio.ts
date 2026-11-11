@@ -19,6 +19,13 @@ export interface ClientePeriodo {
   total: number;
 }
 
+export interface ObservacaoRelatorio {
+  data: string;
+  produtor: string;
+  mercadoria: string;
+  texto: string;
+}
+
 export interface RelatorioOperacao {
   de: string;
   ate: string;
@@ -28,6 +35,7 @@ export interface RelatorioOperacao {
   perda: number;
   dias: DiaOperacao[];
   clientes: ClientePeriodo[];
+  observacoes: ObservacaoRelatorio[];
 }
 
 export interface LinhaFornecedor {
@@ -40,6 +48,7 @@ export interface LinhaFornecedor {
   preco: number | null;
   precoFraco: number | null;
   valor: number;
+  observacao?: string;
 }
 
 export function valorPagarFornecedor(
@@ -116,11 +125,21 @@ export function montarRelatorioOperacao(
   }
 
   const porCliente = new Map<string, ClientePeriodo>();
+  const observacoes: ObservacaoRelatorio[] = [];
 
   for (const entrada of entradas.filter(entradaValida)) {
     if (noPeriodo(entrada.data, inicio, fim)) {
       const dia = diaDoRelatorio(entrada.data);
       if (dia) dia.recebido += entrada.qtd;
+      const texto = entrada.observacao?.trim();
+      if (texto) {
+        observacoes.push({
+          data: entrada.data,
+          produtor: entrada.produtor.trim() || "Sem fornecedor",
+          mercadoria: entrada.mercadoria.trim() || "Mercadoria",
+          texto,
+        });
+      }
     }
 
     for (const destino of destinosDa(entrada)) {
@@ -163,6 +182,7 @@ export function montarRelatorioOperacao(
     perda: dias.reduce((s, d) => s + d.perda, 0),
     dias,
     clientes,
+    observacoes,
   };
 }
 
@@ -189,6 +209,7 @@ export function montarRelatorioFornecedor(
       preco,
       precoFraco,
       valor: valorPagarFornecedor(resultado.boa, resultado.fraca, preco, precoFraco),
+      observacao: entrada.observacao?.trim() || undefined,
     };
     const grupo = grupos.get(produtor) ?? {
       produtor,

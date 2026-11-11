@@ -117,6 +117,7 @@ function entradaPersistivel(entrada: EntradaLancamento): boolean {
       entrada.qtd > 0 ||
       (entrada.preco != null && entrada.preco > 0) ||
       (entrada.precoFraco != null && entrada.precoFraco > 0) ||
+      entrada.observacao?.trim() ||
       (entrada.destinos ?? []).some(destinoPersistivel),
   );
 }
@@ -135,6 +136,74 @@ function completarLinhasVazias(
   return [...lista, ...criarEntradasVazias(data, minimo - doDia)];
 }
 
+function mesclarDestinos(local: DestinoEntrada[], remoto: DestinoEntrada[]): DestinoEntrada[] {
+  const remotoPorId = new Map(remoto.map((destino) => [destino.id, destino]));
+  const vistos = new Set<string>();
+  const resultado: DestinoEntrada[] = [];
+
+  for (const destino of local) {
+    const remota = remotoPorId.get(destino.id);
+    if (remota) {
+      resultado.push(remota);
+      vistos.add(destino.id);
+      continue;
+    }
+    if (!destinoPersistivel(destino)) {
+      resultado.push(destino);
+      vistos.add(destino.id);
+    }
+  }
+
+  for (const destino of remoto) {
+    if (!vistos.has(destino.id)) resultado.push(destino);
+  }
+
+  return resultado;
+}
+
+function mesmaEntrada(a: EntradaLancamento, b: EntradaLancamento): boolean {
+  return (
+    a.id === b.id &&
+    a.data === b.data &&
+    a.produtor === b.produtor &&
+    a.mercadoria === b.mercadoria &&
+    a.qtd === b.qtd &&
+    a.preco === b.preco &&
+    a.precoFraco === b.precoFraco &&
+    a.rendimentoExtra === b.rendimentoExtra &&
+    (a.observacao ?? "") === (b.observacao ?? "") &&
+    JSON.stringify(a.destinos ?? []) === JSON.stringify(b.destinos ?? [])
+  );
+}
+
+function mesmasEntradas(a: EntradaLancamento[], b: EntradaLancamento[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((entrada, i) => mesmaEntrada(entrada, b[i]));
+}
+
+function mesmosPedidos(a: PedidoCliente[], b: PedidoCliente[]): boolean {
+  if (a === b) return true;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function obsDaEntrada(local: EntradaLancamento, remota?: EntradaLancamento, guardadas?: Record<string, string>): string | undefined {
+  const doBanco = remota?.observacao?.trim();
+  if (doBanco) return remota?.observacao;
+  const daTela = local.observacao?.trim();
+  if (daTela) return local.observacao;
+  const lembrada = guardadas?.[local.id]?.trim();
+  return lembrada || undefined;
+}
+
+function lembrarObservacao(id: string, texto: string | undefined) {
+  const mapa = loadFromStorage<Record<string, string>>("entrada-obs-v1", {});
+  const limpo = texto?.trim() ?? "";
+  if (limpo) mapa[id] = limpo;
+  else delete mapa[id];
+  saveToStorage("entrada-obs-v1", mapa);
+}
+
 function mesclarEntradas(
   local: EntradaLancamento[],
   remoto: EntradaLancamento[],
@@ -143,6 +212,7 @@ function mesclarEntradas(
   const remotoPorId = new Map(remoto.map((entrada) => [entrada.id, entrada]));
   const vistos = new Set<string>();
   const resultado: EntradaLancamento[] = [];
+  const obsGuardadas = loadFromStorage<Record<string, string>>("entrada-obs-v1", {});
 
   for (const entrada of local) {
     if (pendentes.has(entrada.id)) {
@@ -152,7 +222,11 @@ function mesclarEntradas(
     }
     const remota = remotoPorId.get(entrada.id);
     if (remota) {
-      resultado.push(remota);
+      resultado.push({
+        ...remota,
+        observacao: obsDaEntrada(entrada, remota, obsGuardadas),
+        destinos: mesclarDestinos(entrada.destinos ?? [], remota.destinos ?? []),
+      });
       vistos.add(entrada.id);
       continue;
     }
@@ -163,10 +237,15 @@ function mesclarEntradas(
   }
 
   for (const entrada of remoto) {
-    if (!vistos.has(entrada.id)) resultado.push(entrada);
+    if (!vistos.has(entrada.id)) {
+      resultado.push({
+        ...entrada,
+        observacao: entrada.observacao?.trim() || obsGuardadas[entrada.id] || undefined,
+      });
+    }
   }
 
-  return resultado;
+  return mesmasEntradas(local, resultado) ? local : resultado;
 }
 
 function mesclarPedidos(
@@ -250,14 +329,24 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     if (!usandoBanco) return;
     return ouvirSync((pacote) => {
       setEntradas((local) => mesclarEntradas(local, pacote.entradas, idsPendentes()));
-      setPedidos((local) => mesclarPedidos(local, pacote.pedidos ?? [], idsPendentes()));
+      setPedidos((local) => {
+        const proxima = mesclarPedidos(local, pacote.pedidos ?? [], idsPendentes());
+        return mesmosPedidos(local, proxima) ? local : proxima;
+      });
       setGravadas((prev) => {
         const next = { ...prev };
         const pendentes = idsPendentes();
+        let mudou = false;
         for (const entrada of pacote.entradas) {
-          if (!pendentes.has(entrada.id) && entradaPersistivel(entrada)) next[entrada.id] = paraApi(entrada);
+          if (!pendentes.has(entrada.id) && entradaPersistivel(entrada)) {
+            const gravada = paraApi(entrada);
+            if (!prev[entrada.id] || JSON.stringify(prev[entrada.id]) !== JSON.stringify(gravada)) {
+              next[entrada.id] = gravada;
+              mudou = true;
+            }
+          }
         }
-        return next;
+        return mudou ? next : prev;
       });
     });
   }, [usandoBanco]);
@@ -363,6 +452,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         return id;
       },
       updateEntrada: (id, patch) => {
+        if ("observacao" in patch) lembrarObservacao(id, patch.observacao);
         setEntradas((prev) => {
           const proxima = prev.map((entrada) => (entrada.id === id ? { ...entrada, ...patch } : entrada));
           const atualizada = proxima.find((entrada) => entrada.id === id);
@@ -374,6 +464,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         const timer = timers.current.get(id);
         if (timer) window.clearTimeout(timer);
         timers.current.delete(id);
+        lembrarObservacao(id, "");
         const snapshot = gravadasRef.current[id];
         setEntradas((prev) => prev.filter((entrada) => entrada.id !== id));
         if (bancoRef.current) {

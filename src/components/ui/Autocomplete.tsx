@@ -62,11 +62,14 @@ export function Autocomplete({
   const escolheuRef = useRef(false);
 
   useEffect(() => {
+    if (inputRef.current && document.activeElement === inputRef.current) return;
     setRascunho(value);
     if (sugestoes.length > 0 && value.trim() && !acharCadastrado(value, sugestoes)) {
       setAviso(mensagemNaoCadastrado(value.trim(), tipoItem));
+    } else if (!value.trim()) {
+      setAviso("");
     }
-  }, [value, sugestoes, tipoItem]);
+  }, [value, tipoItem]);
 
   const termo = rascunho.trim();
   const busca = semAcento(termo);

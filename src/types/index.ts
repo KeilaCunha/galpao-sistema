@@ -112,6 +112,8 @@ export interface EntradaLancamento {
   precoFraco?: number | null;
   /** Caixas a mais quando a carga rendeu além do informado */
   rendimentoExtra?: number;
+  /** Recado curto desta carga — não altera quantidade nem preço */
+  observacao?: string;
   /** Destinos desta carga — preenchidos na própria linha da operação */
   destinos?: DestinoEntrada[];
 }
@@ -155,6 +157,7 @@ export interface LinhaPlanilha {
   preco: number | null;
   precoFraco?: number | null;
   destinos: DestinoEntrada[];
+  observacao?: string;
   /** Data (ISO) de origem, quando esta linha nasceu automaticamente da sobra de outro dia */
   origemSobraDe?: string;
   /** Id da linha (no dia de origem) que gerou esta linha automaticamente, usado para manter a sincronização */
