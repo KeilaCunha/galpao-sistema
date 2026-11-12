@@ -257,18 +257,27 @@ export function destinosDoEstoqueNoDia(entrada: EntradaLancamento, data: string)
   return destinosDoDia(entrada, data).filter((destino) => !destinoDaFolha(destino, entrada));
 }
 
-export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: string): number {
-  const destinos = destinosDa(entrada).filter((destino) =>
-    ateData ? dataDoDestino(destino, entrada) < ateData : true,
-  );
+function reservaEImplicita(entrada: EntradaLancamento, destinos: DestinoEntrada[]) {
   const vendidoFolha = consumidoDaEntrada(destinos.filter((destino) => destinoDaFolha(destino, entrada)));
-  const vendidoEstoque = consumidoDaEntrada(destinos.filter((destino) => !destinoDaFolha(destino, entrada)));
   const reserva = destinos
     .filter((destino) => destinoEhSobra(destino))
     .reduce((soma, destino) => soma + (qtdDestino(destino) ?? 0), 0);
   const implicita = Math.max(0, capacidadeEntrada(entrada) - vendidoFolha);
-  const extraSobra = Math.max(0, reserva - implicita);
-  return Math.max(0, implicita + extraSobra - vendidoEstoque);
+  return implicita + Math.max(0, reserva - implicita);
+}
+
+/** Sobra que foi para o estoque no dia seguinte, antes de vender daí. 19 + 3 + 2 + 9 = 33. */
+export function sobraOriginal(entrada: EntradaLancamento): number {
+  return reservaEImplicita(entrada, destinosDa(entrada));
+}
+
+/** Quanto ainda resta em estoque depois das vendas feitas a partir da sobra. */
+export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: string): number {
+  const destinos = destinosDa(entrada).filter((destino) =>
+    ateData ? dataDoDestino(destino, entrada) < ateData : true,
+  );
+  const vendidoEstoque = consumidoDaEntrada(destinos.filter((destino) => !destinoDaFolha(destino, entrada)));
+  return Math.max(0, reservaEImplicita(entrada, destinos) - vendidoEstoque);
 }
 
 export function restanteEntrada(
@@ -342,9 +351,10 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
     .map((entrada) => ({
       entrada,
       restante: restanteEntradaDireto(entrada),
+      original: sobraOriginal(entrada),
       consumido: consumidoDaEntrada(destinosDa(entrada)),
     }))
-    .filter((item) => item.restante > 0)
+    .filter((item) => item.original > 0 || item.restante > 0)
     .sort(
       (a, b) =>
         a.entrada.data.localeCompare(b.entrada.data) || compararLancamento(ordem, a.entrada.id, b.entrada.id),
@@ -352,15 +362,17 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
 }
 
 /** Sobra ainda em estoque, agrupada por dia — na ordem em que a carga foi lançada.
- *  Só entra no estoque no dia seguinte ao lançamento, nunca na folha do mesmo dia. */
+ *  Só entra no estoque no dia seguinte ao lançamento, nunca na folha do mesmo dia.
+ *  A quantidade é a sobra original lançada no destino do dia anterior. */
 export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) {
   const porDia = new Map<
     string,
-    { entradaId: string; produtor: string; mercadoria: string; restante: number; fraca: number }[]
+    { entradaId: string; produtor: string; mercadoria: string; restante: number; original: number; fraca: number }[]
   >();
 
   for (const item of sobrasAtuais(entradas)) {
     if (dataFolha && item.entrada.data >= dataFolha) continue;
+    if (item.original <= 0 && item.restante <= 0) continue;
     const dia = item.entrada.data;
     const lista = porDia.get(dia) ?? [];
     lista.push({
@@ -368,7 +380,8 @@ export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) 
       produtor: item.entrada.produtor || "Sem fornecedor",
       mercadoria: item.entrada.mercadoria,
       restante: item.restante,
-      fraca: fracaEmEstoque(item.entrada),
+      original: item.original,
+      fraca: fracaEmEstoque(item.entrada, dataFolha),
     });
     porDia.set(dia, lista);
   }
@@ -380,7 +393,7 @@ export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) 
       return {
         data,
         itens,
-        total: itens.reduce((soma, item) => soma + item.restante, 0),
+        total: itens.reduce((soma, item) => soma + (item.original || item.restante), 0),
       };
     });
 }

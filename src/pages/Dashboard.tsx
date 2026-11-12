@@ -19,6 +19,7 @@ import {
   fracaEmEstoque,
   ordemDeLancamento,
   restanteEntradaDireto,
+  sobraOriginal,
 } from "../utils/alocacao";
 import { destinoPersistivel } from "../utils/destino";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
@@ -189,6 +190,7 @@ export default function Dashboard() {
         produtor: entrada.produtor || "Sem fornecedor",
         mercadoria: entrada.mercadoria,
         restante: restanteEntradaDireto(entrada),
+        original: sobraOriginal(entrada),
         fraca: fracaEmEstoque(entrada),
         abrev: abrevMercadoria(entrada.mercadoria),
       });
@@ -203,7 +205,7 @@ export default function Dashboard() {
         return {
           data: dia,
           itens: naOrdem,
-          total: naOrdem.reduce((soma, item) => soma + item.restante, 0),
+          total: naOrdem.reduce((soma, item) => soma + (item.original || item.restante), 0),
         };
       });
   }, [sobrasPendentes, entradas, data]);
@@ -542,6 +544,7 @@ export default function Dashboard() {
                             const vendidoHoje = entrada
                               ? destinosDoEstoqueNoDia(entrada, data).filter(destinoPersistivel)
                               : [];
+                            const original = item.original || item.restante;
                             return (
                               <tr key={item.entradaId} className="border-t border-neutral-100">
                                 <td className="px-4 py-3 font-semibold text-neutral-800">{item.produtor}</td>
@@ -552,12 +555,12 @@ export default function Dashboard() {
                                 <td className="px-4 py-3 text-right">
                                   <span
                                     className={`inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-bold ${
-                                      item.restante > 0
+                                      original > 0
                                         ? "border-dashed border-danger-500/50 bg-danger-50 text-danger-600"
                                         : "border-neutral-200 bg-neutral-50 text-neutral-400"
                                     }`}
                                   >
-                                    {item.restante} cx
+                                    {original} cx
                                     {item.fraca > 0 ? (
                                       <sup className="ml-0.5 text-[9px] font-extrabold">
                                         {item.fraca >= item.restante ? "fr" : `${item.fraca} fr`}
@@ -616,7 +619,8 @@ export default function Dashboard() {
           const entrada = entradas.find((e) => e.id === destinoSobraId);
           if (!entrada) return undefined;
           const item = estoqueExibicao.flatMap((dia) => dia.itens).find((s) => s.entradaId === entrada.id);
-          return `${entrada.produtor || "Produtor"} · ${entrada.mercadoria || "Mercadoria"} · sobra ${item?.restante ?? 0} cx`;
+          const original = item?.original || item?.restante || 0;
+          return `${entrada.produtor || "Produtor"} · ${entrada.mercadoria || "Mercadoria"} · sobra ${original} cx`;
         })()}
       />
     </div>
