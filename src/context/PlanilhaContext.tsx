@@ -35,7 +35,9 @@ interface PlanilhaContextValue {
   updateEntrada: (id: string, patch: Partial<Omit<EntradaLancamento, "id">>) => void;
   removeEntrada: (id: string) => void;
   addPedido: (dados: Omit<PedidoCliente, "id">) => string;
-  definirPedido: (dados: Omit<PedidoCliente, "id" | "tipo"> & { tipo?: string; qtd: number | null }) => void;
+  definirPedido: (
+    dados: Omit<PedidoCliente, "id" | "tipo" | "qtd"> & { tipo?: string; qtd: number | null },
+  ) => void;
   removePedido: (id: string) => void;
   addDestino: (entradaId: string, destino: Omit<DestinoEntrada, "id">) => void;
   updateDestino: (entradaId: string, destinoId: string, patch: Partial<Omit<DestinoEntrada, "id">>) => void;
