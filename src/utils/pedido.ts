@@ -4,8 +4,8 @@ import {
   abrevTipo,
   nomeTipoCliente,
   ordemClassificacao,
+  destinoEhSobra,
   qtdDestino,
-  tipoEhEstoque,
   tipoEhFraco,
   tipoEhPerda,
 } from "./classificacao";
@@ -115,7 +115,7 @@ export function montarPorCliente(
     const mercadoria = entrada.mercadoria || "Mercadoria";
     for (const destino of destinosDoDia(entrada, data)) {
       const cliente = destino.cliente.trim();
-      if (!cliente || tipoEhPerda(destino.tipo) || tipoEhEstoque(destino.tipo)) continue;
+      if (!cliente || tipoEhPerda(destino.tipo) || destinoEhSobra(destino)) continue;
       const tipo = destino.tipo?.trim() ?? "";
       const soFraca = !tipo && (destino.fraca ?? 0) > 0 && !(destino.boa ?? 0);
       const osDois = !tipo && (destino.boa ?? 0) > 0 && (destino.fraca ?? 0) > 0;

@@ -25,7 +25,15 @@ export function tipoEhPerda(tipo?: string): boolean {
 }
 
 export function tipoEhEstoque(tipo?: string): boolean {
-  return semAcento(tipo ?? "") === "estoque";
+  const chave = semAcento(tipo ?? "");
+  return chave === "estoque" || chave === "sobra";
+}
+
+/** Sobra para o outro dia: tipo Estoque/Sobra ou cliente Estoque/Sobra. */
+export function destinoEhSobra(destino: { tipo?: string; cliente?: string }): boolean {
+  if (tipoEhEstoque(destino.tipo)) return true;
+  const cliente = semAcento(destino.cliente ?? "");
+  return cliente === "estoque" || cliente === "sobra";
 }
 
 export function tipoEhFraco(tipo?: string): boolean {

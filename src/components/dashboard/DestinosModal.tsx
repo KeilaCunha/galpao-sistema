@@ -10,6 +10,7 @@ import type { EntradaLancamento } from "../../types";
 import { pausarSync, retomarSync } from "../../api/sync";
 import { destinosDaFolhaNoDia, destinosDoEstoqueNoDia, tipoPadraoDestino } from "../../utils/alocacao";
 import {
+  destinoEhSobra,
   ehTomate,
   opcoesClassificacao,
   patchQtd,
@@ -134,9 +135,17 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                             <Autocomplete
                               tipoItem="cliente"
                               value={destino.cliente}
-                              onChange={(cliente) =>
-                                updateDestino(atual.id, destino.id, { cliente, data: dataDestino })
-                              }
+                              onChange={(cliente) => {
+                                if (destinoEhSobra({ cliente })) {
+                                  updateDestino(atual.id, destino.id, {
+                                    ...patchTipo("Estoque", destino),
+                                    cliente: "Estoque",
+                                    data: dataDestino,
+                                  });
+                                  return;
+                                }
+                                updateDestino(atual.id, destino.id, { cliente, data: dataDestino });
+                              }}
                               sugestoes={clientesSugestao}
                               placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
                             />

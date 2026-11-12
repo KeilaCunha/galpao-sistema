@@ -1,6 +1,6 @@
 import type { EntradaLancamento } from "../types";
 import { dataDoDestino, destinosDa, entradaValida } from "./alocacao";
-import { qtdDestino, tipoEhEstoque, tipoEhFraco, tipoEhPerda } from "./classificacao";
+import { destinoEhSobra, qtdDestino, tipoEhFraco, tipoEhPerda } from "./classificacao";
 import { datasNoIntervalo } from "./periodo";
 
 export interface DiaOperacao {
@@ -92,7 +92,7 @@ function resultadoCarga(entrada: EntradaLancamento) {
   let fraca = 0;
   let perda = 0;
   for (const destino of destinosDa(entrada)) {
-    if (tipoEhEstoque(destino.tipo)) continue;
+    if (destinoEhSobra(destino)) continue;
     perda += destino.perda ?? 0;
     if (tipoEhPerda(destino.tipo)) continue;
     const qtd = qtdDestino(destino) ?? 0;
@@ -147,7 +147,7 @@ export function montarRelatorioOperacao(
       if (!noPeriodo(dataDestino, inicio, fim)) continue;
       const dia = diaDoRelatorio(dataDestino);
       if (!dia) continue;
-      if (tipoEhEstoque(destino.tipo)) continue;
+      if (destinoEhSobra(destino)) continue;
 
       dia.perda += destino.perda ?? 0;
       if (tipoEhPerda(destino.tipo)) continue;

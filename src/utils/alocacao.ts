@@ -1,6 +1,6 @@
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import { abrevMercadoria, mercadoriasIguais } from "./abrev";
-import { ehTomate, qtdDestino, tipoEhEstoque } from "./classificacao";
+import { destinoEhSobra, ehTomate, qtdDestino } from "./classificacao";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
   return entrada.qtd;
@@ -145,14 +145,14 @@ export function consumidoDaEntrada(
 ): number {
   if (!destinos) return 0;
   return destinos.reduce((soma, destino) => {
-    if (tipoEhEstoque(destino.tipo)) return soma;
+    if (destinoEhSobra(destino)) return soma;
     return soma + (destino.boa ?? 0) + (destino.fraca ?? 0) + (destino.perda ?? 0);
   }, 0);
 }
 
 export function qtdReservaEstoque(entrada: EntradaLancamento): number {
   return destinosDa(entrada)
-    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .filter((destino) => destinoEhSobra(destino))
     .reduce((soma, destino) => soma + (destino.fraca ?? 0) + (destino.boa ?? 0), 0);
 }
 
@@ -161,7 +161,7 @@ export function fracaEmEstoque(entrada: EntradaLancamento, ateData?: string): nu
     ateData ? dataDoDestino(destino, entrada) < ateData : true,
   );
   const fracaReserva = destinos
-    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .filter((destino) => destinoEhSobra(destino))
     .reduce((soma, destino) => soma + (destino.fraca ?? 0), 0);
   return Math.min(fracaReserva, restanteEntradaDireto(entrada, ateData));
 }
@@ -218,7 +218,7 @@ export function resumoDoDia(entradas: EntradaLancamento[], data: string) {
   for (const entrada of entradas) {
     for (const destino of destinosDa(entrada)) {
       if (dataDoDestino(destino, entrada) !== data) continue;
-      if (tipoEhEstoque(destino.tipo)) continue;
+      if (destinoEhSobra(destino)) continue;
       if ((destino.perda ?? 0) > 0) perda += destino.perda ?? 0;
       else {
         feitoBom += destino.boa ?? 0;
@@ -264,7 +264,7 @@ export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: stri
   const vendidoFolha = consumidoDaEntrada(destinos.filter((destino) => destinoDaFolha(destino, entrada)));
   const vendidoEstoque = consumidoDaEntrada(destinos.filter((destino) => !destinoDaFolha(destino, entrada)));
   const reserva = destinos
-    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .filter((destino) => destinoEhSobra(destino))
     .reduce((soma, destino) => soma + (qtdDestino(destino) ?? 0), 0);
   const implicita = Math.max(0, capacidadeEntrada(entrada) - vendidoFolha);
   const extraSobra = Math.max(0, reserva - implicita);
@@ -296,7 +296,7 @@ export function migrarSaidasParaDestinos(
 export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[] {
   return entradas.flatMap((entrada) =>
     destinosDa(entrada)
-      .filter((destino) => !tipoEhEstoque(destino.tipo))
+      .filter((destino) => !destinoEhSobra(destino))
       .filter((destino) => destino.cliente.trim() || (destino.perda ?? 0) > 0 || (destino.boa ?? 0) > 0 || (destino.fraca ?? 0) > 0)
       .map((destino) => ({
         id: destino.id,
@@ -311,9 +311,9 @@ export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[
   );
 }
 
-/** Folha do dia: só as linhas lançadas naquela data. Sobra de outro dia fica no dia da entrada e na aba Sobras. */
+/** Folha do dia: lançamentos da data + sobra de dias anteriores que ainda está em estoque. */
 export function montarLinhas(entradas: EntradaLancamento[], data: string): LinhaPlanilha[] {
-  return entradas
+  const doDia = entradas
     .filter((item) => item.data === data)
     .map((entrada) => ({
       id: entrada.id,
@@ -325,6 +325,29 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
       destinos: destinosDa(entrada),
       observacao: entrada.observacao,
     }));
+
+  const herdadas = entradas
+    .filter(entradaValida)
+    .filter((item) => item.data < data)
+    .map((entrada) => ({
+      entrada,
+      restante: restanteEntradaDireto(entrada, data),
+    }))
+    .filter((item) => item.restante > 0)
+    .map(({ entrada, restante }) => ({
+      id: entrada.id,
+      produtor: entrada.produtor,
+      qtd: restante,
+      mercadoria: entrada.mercadoria,
+      preco: entrada.preco,
+      precoFraco: entrada.precoFraco ?? null,
+      destinos: destinosDa(entrada),
+      observacao: entrada.observacao,
+      origemSobraDe: entrada.data,
+      origemLinhaId: entrada.id,
+    }));
+
+  return [...herdadas, ...doDia];
 }
 
 export function ordemDeLancamento(entradas: EntradaLancamento[]): Map<string, number> {

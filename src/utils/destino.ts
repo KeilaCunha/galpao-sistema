@@ -1,5 +1,5 @@
 import type { DestinoEntrada, LinhaPlanilha } from "../types";
-import { tipoEhEstoque } from "./classificacao";
+import { destinoEhSobra } from "./classificacao";
 import { addDays } from "./format";
 
 /** Destino com cliente, quantidade ou motivo — o rascunho vazio da modal não entra no banco. */
@@ -14,7 +14,7 @@ export function destinoPersistivel(destino: DestinoEntrada): boolean {
   }
   const cliente = destino.cliente?.trim() ?? "";
   if (!cliente) return false;
-  if (tipoEhEstoque(destino.tipo) || cliente.toLowerCase() === "estoque") return false;
+  if (destinoEhSobra(destino) || cliente.toLowerCase() === "estoque" || cliente.toLowerCase() === "sobra") return false;
   return true;
 }
 
@@ -55,7 +55,7 @@ export function resumoAlocado(destinos: DestinoEntrada[], _qtd: number | null): 
   const vendas: DestinoEntrada[] = [];
   const reservas: DestinoEntrada[] = [];
   for (const destino of destinos) {
-    if (tipoEhEstoque(destino.tipo)) reservas.push(destino);
+    if (destinoEhSobra(destino)) reservas.push(destino);
     else vendas.push(destino);
   }
   const venda = resumoDestinos(vendas);
