@@ -50,7 +50,7 @@ interface PlanilhaContextValue {
     minimo?: number,
   ) => void;
   resumo: (data: string) => ReturnType<typeof resumoDoDia>;
-  sobras: () => ReturnType<typeof sobrasPorDia>;
+  sobras: (data?: string) => ReturnType<typeof sobrasPorDia>;
 }
 
 const LINHAS_PADRAO = 12;
@@ -645,7 +645,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         });
       },
       resumo: (data) => resumoDoDia(entradas, data),
-      sobras: () => sobrasPorDia(entradas),
+      sobras: (data) => sobrasPorDia(entradas, data),
     }),
     [entradas, pedidos, saidas, usandoBanco, statusBanco, gravadas],
   );

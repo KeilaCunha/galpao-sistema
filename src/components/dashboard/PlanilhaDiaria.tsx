@@ -9,9 +9,9 @@ import { useToast } from "../../context/ToastContext";
 import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import type { CampoTrava } from "../../utils/permissoes";
 import { campoTravado, ehResponsavel } from "../../utils/permissoes";
-import { ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
+import { destinoEhSobra, ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
 import { calcularRendimento, calcularSobra, destinoPersistivel, resumoAlocado, statusQtdFeita } from "../../utils/destino";
-import { formatDate, formatPreco, parsePreco } from "../../utils/format";
+import { formatPreco, parsePreco } from "../../utils/format";
 import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -76,9 +76,8 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
     const observador = new IntersectionObserver(
       (entradasObs) => {
         if (!entradasObs[0]?.isIntersecting) return;
-        const doDia = linhas.filter((linha) => !linha.origemSobraDe).length;
-        if (doDia >= MAX_LINHAS_DIA) return;
-        garantirLinhasDoDia(data, Math.min(doDia + LOTE_LINHAS, MAX_LINHAS_DIA));
+        if (linhas.length >= MAX_LINHAS_DIA) return;
+        garantirLinhasDoDia(data, Math.min(linhas.length + LOTE_LINHAS, MAX_LINHAS_DIA));
       },
       { root: null, rootMargin: "240px" },
     );
@@ -119,7 +118,6 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
   );
 
   const entradaModal = editandoId ? entradas.find((e) => e.id === editandoId) : undefined;
-  const linhaEditando = editandoId ? linhas.find((linha) => linha.id === editandoId) : undefined;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
@@ -168,39 +166,31 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
           </thead>
           <tbody>
             {linhasVisiveis.map((linha) => {
-              const herdada = Boolean(linha.origemSobraDe);
-              const destinosDia = linha.destinos.filter((destino) => {
-                if ((destino.data || data) !== data || !destinoPersistivel(destino)) return false;
-                return herdada ? destino.origem === "estoque" : destino.origem !== "estoque";
-              });
-              const resumo = resumoAlocado(herdada ? destinosDia : linha.destinos, linha.qtd);
+              const resumo = resumoAlocado(linha.destinos, linha.qtd);
+              const destinosDia = linha.destinos.filter(
+                (destino) =>
+                  (destino.data || data) === data &&
+                  destino.origem !== "estoque" &&
+                  !destinoEhSobra(destino) &&
+                  destinoPersistivel(destino),
+              );
               const status = statusQtdFeita(linha.qtd, resumo);
               const sobra = calcularSobra(linha.qtd, resumo);
-              const rendeu = herdada ? 0 : calcularRendimento(linha.qtd, resumo);
+              const rendeu = calcularRendimento(linha.qtd, resumo);
               return (
-                <tr
-                  key={linha.id}
-                  className={`border-b border-neutral-50 last:border-0 ${herdada ? "bg-warning-50/40" : ""}`}
-                >
+                <tr key={linha.id} className="border-b border-neutral-50 last:border-0">
                   {vis.produtor && (
                   <td className="p-1 align-top">
                     <CampoTravado travado={travado(linha.id, "produtor")} onLiberar={() => setPedido({ id: linha.id, campos: ["produtor"] })}>
-                      <div>
-                        <Autocomplete
-                          compact
-                          tipoItem="fornecedor"
-                          value={linha.produtor}
-                          onChange={(produtor) => updateEntrada(linha.id, { produtor })}
-                          sugestoes={produtores}
-                          placeholder="Produtor"
-                          disabled={travado(linha.id, "produtor") || herdada}
-                        />
-                        {herdada && linha.origemSobraDe && (
-                          <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-warning-700">
-                            sobra {formatDate(linha.origemSobraDe)}
-                          </p>
-                        )}
-                      </div>
+                      <Autocomplete
+                        compact
+                        tipoItem="fornecedor"
+                        value={linha.produtor}
+                        onChange={(produtor) => updateEntrada(linha.id, { produtor })}
+                        sugestoes={produtores}
+                        placeholder="Produtor"
+                        disabled={travado(linha.id, "produtor")}
+                      />
                     </CampoTravado>
                   </td>
                   )}
@@ -216,7 +206,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                           updateEntrada(linha.id, { qtd: e.target.value === "" ? 0 : Number(e.target.value) })
                         }
                         placeholder="0"
-                        disabled={travado(linha.id, "qtd") || herdada}
+                        disabled={travado(linha.id, "qtd")}
                       />
                     </CampoTravado>
                   </td>
@@ -229,7 +219,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                       <div className="leading-tight">
                         <p className="font-semibold text-neutral-800">
                           {ehTomate(linha.mercadoria) ? (
-                            <QtdFeitaTomate destinos={herdada ? destinosDia : linha.destinos} qtd={linha.qtd} />
+                            <QtdFeitaTomate destinos={linha.destinos} qtd={linha.qtd} />
                           ) : (
                             <>
                               {resumo.boa}
@@ -270,7 +260,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                         onChange={(mercadoria) => updateEntrada(linha.id, { mercadoria })}
                         sugestoes={mercadorias}
                         placeholder="Mercadoria"
-                        disabled={travado(linha.id, "mercadoria") || herdada}
+                        disabled={travado(linha.id, "mercadoria")}
                       />
                     </CampoTravado>
                   </td>
@@ -303,12 +293,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                         title={pode("destinos") ? "Clique para informar destinos" : "Sem acesso aos destinos"}
                       >
                         <DestinoChips destinos={destinosDia} />
-                        {sobra > 0 && (
-                          <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
-                            {sobra} sobra
-                          </span>
-                        )}
-                        {destinosDia.length === 0 && sobra === 0 && (
+                        {destinosDia.length === 0 && (
                           <span className="text-xs text-neutral-400">+ destino</span>
                         )}
                       </div>
@@ -327,7 +312,6 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                           onChange={(observacao) => updateEntrada(linha.id, { observacao })}
                         />
                       )}
-                      {!herdada && (
                       <button
                         type="button"
                         onClick={() => {
@@ -342,7 +326,6 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                       >
                         <Trash2 size={14} />
                       </button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -385,12 +368,6 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
         onClose={() => setEditandoId(null)}
         entrada={entradaModal}
         dataDestino={data}
-        origemEstoque={Boolean(linhaEditando?.origemSobraDe)}
-        descricao={
-          linhaEditando?.origemSobraDe
-            ? `Sobra de ${formatDate(linhaEditando.origemSobraDe)} · ${entradaModal?.produtor || "Fornecedor"} · ${entradaModal?.mercadoria || "Mercadoria"} · ${linhaEditando.qtd ?? 0} cx`
-            : undefined
-        }
       />
 
       <ConfirmDialog

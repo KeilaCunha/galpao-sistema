@@ -311,9 +311,9 @@ export function saidasDerivadas(entradas: EntradaLancamento[]): SaidaLancamento[
   );
 }
 
-/** Folha do dia: lançamentos da data + sobra de dias anteriores que ainda está em estoque. */
+/** Folha do dia: só as linhas lançadas naquela data. Sobra de outro dia fica no dia da entrada e na aba Sobras. */
 export function montarLinhas(entradas: EntradaLancamento[], data: string): LinhaPlanilha[] {
-  const doDia = entradas
+  return entradas
     .filter((item) => item.data === data)
     .map((entrada) => ({
       id: entrada.id,
@@ -325,29 +325,6 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
       destinos: destinosDa(entrada),
       observacao: entrada.observacao,
     }));
-
-  const herdadas = entradas
-    .filter(entradaValida)
-    .filter((item) => item.data < data)
-    .map((entrada) => ({
-      entrada,
-      restante: restanteEntradaDireto(entrada, data),
-    }))
-    .filter((item) => item.restante > 0)
-    .map(({ entrada, restante }) => ({
-      id: entrada.id,
-      produtor: entrada.produtor,
-      qtd: restante,
-      mercadoria: entrada.mercadoria,
-      preco: entrada.preco,
-      precoFraco: entrada.precoFraco ?? null,
-      destinos: destinosDa(entrada),
-      observacao: entrada.observacao,
-      origemSobraDe: entrada.data,
-      origemLinhaId: entrada.id,
-    }));
-
-  return [...herdadas, ...doDia];
 }
 
 export function ordemDeLancamento(entradas: EntradaLancamento[]): Map<string, number> {
@@ -374,14 +351,16 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
     );
 }
 
-/** Sobra ainda em estoque, agrupada por dia — na ordem em que a carga foi lançada. */
-export function sobrasPorDia(entradas: EntradaLancamento[]) {
+/** Sobra ainda em estoque, agrupada por dia — na ordem em que a carga foi lançada.
+ *  Só entra no estoque no dia seguinte ao lançamento, nunca na folha do mesmo dia. */
+export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) {
   const porDia = new Map<
     string,
     { entradaId: string; produtor: string; mercadoria: string; restante: number; fraca: number }[]
   >();
 
   for (const item of sobrasAtuais(entradas)) {
+    if (dataFolha && item.entrada.data >= dataFolha) continue;
     const dia = item.entrada.data;
     const lista = porDia.get(dia) ?? [];
     lista.push({

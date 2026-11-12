@@ -171,7 +171,7 @@ export default function Dashboard() {
 
   const linhasDoDia = getLinhas(data);
   const stats = resumo(data);
-  const sobrasPendentes = sobras();
+  const sobrasPendentes = sobras(data);
   const totalSobras = sobrasPendentes.reduce((soma, dia) => soma + dia.total, 0);
   const ehHoje = data === dataInicial;
 
@@ -180,7 +180,7 @@ export default function Dashboard() {
     for (const dia of sobrasPendentes) grupos.set(dia.data, [...dia.itens]);
 
     for (const entrada of entradas) {
-      if (entrada.data === data) continue;
+      if (entrada.data >= data) continue;
       if (destinosDoEstoqueNoDia(entrada, data).length === 0) continue;
       const lista = grupos.get(entrada.data) ?? [];
       if (lista.some((item) => item.entradaId === entrada.id)) continue;
