@@ -531,7 +531,7 @@ export default function Dashboard() {
                           <tr className="bg-neutral-50">
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Fornecedor</th>
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
-                            <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase text-warning-600">Sobra</th>
+                            <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase text-danger-500">Sobra</th>
                             <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Destino</th>
                             <th className="w-28 px-4 py-2.5" />
                           </tr>
@@ -550,7 +550,13 @@ export default function Dashboard() {
                                   <p className="text-[11px] font-bold tracking-wide text-neutral-400">{item.abrev}</p>
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                  <span className="inline-flex items-center rounded-md border border-dashed border-warning-500/40 bg-warning-50 px-2.5 py-1 text-sm font-bold text-warning-700">
+                                  <span
+                                    className={`inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-bold ${
+                                      item.restante > 0
+                                        ? "border-dashed border-danger-500/50 bg-danger-50 text-danger-600"
+                                        : "border-neutral-200 bg-neutral-50 text-neutral-400"
+                                    }`}
+                                  >
                                     {item.restante} cx
                                     {item.fraca > 0 ? (
                                       <sup className="ml-0.5 text-[9px] font-extrabold">
@@ -562,7 +568,17 @@ export default function Dashboard() {
                                 <td className="px-4 py-3">
                                   <div className="flex flex-wrap items-center gap-1">
                                     <DestinoChips destinos={vendidoHoje} />
-                                    {vendidoHoje.length === 0 && (
+                                    {item.restante > 0 && (
+                                      <span className="inline-flex items-center rounded-md border border-dashed border-danger-500/50 bg-danger-50 px-2 py-0.5 text-xs font-bold text-danger-600">
+                                        {item.restante} sobra
+                                        {item.fraca > 0 ? (
+                                          <sup className="ml-0.5 text-[9px] font-extrabold">
+                                            {item.fraca >= item.restante ? "fr" : `${item.fraca} fr`}
+                                          </sup>
+                                        ) : null}
+                                      </span>
+                                    )}
+                                    {vendidoHoje.length === 0 && item.restante <= 0 && (
                                       <span className="text-xs text-neutral-400">—</span>
                                     )}
                                   </div>
