@@ -20,7 +20,20 @@ export function tiposDaMercadoria(mercadoria: string): string[] {
   return ehTomate(mercadoria) ? [...TIPOS_TOMATE] : [...TIPOS_PADRAO];
 }
 
+export function tipoEhPerda(tipo?: string): boolean {
+  return semAcento(tipo ?? "") === "perda";
+}
+
+export function tipoEhEstoque(tipo?: string): boolean {
+  return semAcento(tipo ?? "") === "estoque";
+}
+
+export function tipoEhFraco(tipo?: string): boolean {
+  return semAcento(tipo ?? "") === "fraco";
+}
+
 export function labelTipo(mercadoria: string, tipo: string): string {
+  if (tipoEhEstoque(tipo)) return "Sobra";
   if (ehTomate(mercadoria)) return `Tomate ${tipo === "Verde" ? "verde" : tipo}`;
   return tipo;
 }
@@ -34,27 +47,15 @@ export function opcoesClassificacao(
       value: tipo,
       label: labelTipo(mercadoria, tipo),
     })),
-    ...(!origemEstoque ? [{ value: "Estoque", label: "Sobra fraca" }] : []),
+    ...(!origemEstoque ? [{ value: "Estoque", label: "Sobra" }] : []),
     { value: "Perda", label: "Perda" },
   ];
-}
-
-export function tipoEhPerda(tipo?: string): boolean {
-  return semAcento(tipo ?? "") === "perda";
-}
-
-export function tipoEhEstoque(tipo?: string): boolean {
-  return semAcento(tipo ?? "") === "estoque";
-}
-
-export function tipoEhFraco(tipo?: string): boolean {
-  return semAcento(tipo ?? "") === "fraco";
 }
 
 export function abrevTipo(tipo?: string): string {
   const chave = semAcento(tipo ?? "");
   if (chave === "bom" || chave === "graudo" || chave === "aaa") return "";
-  if (chave === "estoque") return "EST";
+  if (chave === "estoque") return "";
   if (chave === "fraco") return "FR";
   if (chave === "saladao") return "SAL";
   if (chave === "verde") return "VD";
@@ -63,7 +64,8 @@ export function abrevTipo(tipo?: string): string {
 
 export function qtdDestino(destino: DestinoEntrada): number | null {
   if (tipoEhPerda(destino.tipo)) return destino.perda ?? destino.boa ?? destino.fraca;
-  if (tipoEhEstoque(destino.tipo) || tipoEhFraco(destino.tipo)) return destino.fraca ?? destino.boa;
+  if (tipoEhFraco(destino.tipo)) return destino.fraca ?? destino.boa;
+  if (tipoEhEstoque(destino.tipo)) return destino.boa ?? destino.fraca;
   return destino.boa ?? destino.fraca;
 }
 
@@ -72,7 +74,8 @@ export function patchQtd(
   qtd: number | null,
 ): Pick<DestinoEntrada, "boa" | "fraca" | "perda"> {
   if (tipoEhPerda(tipo)) return { boa: null, fraca: null, perda: qtd };
-  if (tipoEhEstoque(tipo) || tipoEhFraco(tipo)) return { boa: null, fraca: qtd, perda: null };
+  if (tipoEhFraco(tipo)) return { boa: null, fraca: qtd, perda: null };
+  if (tipoEhEstoque(tipo)) return { boa: qtd, fraca: null, perda: null };
   return { boa: qtd, fraca: null, perda: null };
 }
 
@@ -92,7 +95,7 @@ export type ResumoFeitaTomate = {
 export function grupoTipoTomate(tipo?: string): keyof ResumoFeitaTomate {
   const chave = semAcento(tipo ?? "");
   if (chave === "perda") return "perda";
-  if (chave === "fraco" || chave === "estoque") return "fr";
+  if (chave === "fraco") return "fr";
   if (chave === "aa") return "aa";
   if (chave === "a") return "a";
   return "bom";
@@ -111,12 +114,12 @@ export function ordemClassificacao(mercadoria: string, tipo: string): number {
   return i === -1 ? 50 : i;
 }
 
-export function resumoFeitaTomate(destinos: DestinoEntrada[], qtdMeta?: number | null): ResumoFeitaTomate {
+export function resumoFeitaTomate(destinos: DestinoEntrada[], _qtdMeta?: number | null): ResumoFeitaTomate {
   const resumo: ResumoFeitaTomate = { bom: 0, aa: 0, a: 0, fr: 0, perda: 0 };
-  let reserva = 0;
   for (const destino of destinos) {
     if (tipoEhEstoque(destino.tipo)) {
-      reserva += qtdDestino(destino) ?? 0;
+      resumo.bom += destino.boa ?? 0;
+      resumo.fr += destino.fraca ?? 0;
       continue;
     }
     if (!tipoEhPerda(destino.tipo)) resumo.perda += destino.perda ?? 0;
@@ -127,8 +130,5 @@ export function resumoFeitaTomate(destinos: DestinoEntrada[], qtdMeta?: number |
     const grupo = soFraca ? "fr" : grupoTipoTomate(destino.tipo);
     resumo[grupo] += qtd;
   }
-  const vendido = resumo.bom + resumo.aa + resumo.a + resumo.fr + resumo.perda;
-  const restante = qtdMeta == null ? reserva : Math.max(0, qtdMeta - vendido);
-  resumo.fr += Math.min(reserva, restante);
   return resumo;
 }

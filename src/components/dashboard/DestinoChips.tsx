@@ -18,8 +18,10 @@ export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
             {ehEstoque ? (
               qtd > 0 ? (
                 <span className="inline-flex items-center rounded-md bg-warning-50 px-2 py-0.5 text-xs font-bold text-warning-700">
-                  {qtd} estoque
-                  <sup className="ml-0.5 text-[9px] font-extrabold">fr</sup>
+                  {qtd} sobra
+                  {(destino.fraca ?? 0) > 0 && !(destino.boa ?? 0) ? (
+                    <sup className="ml-0.5 text-[9px] font-extrabold">fr</sup>
+                  ) : null}
                 </span>
               ) : null
             ) : ehPerda ? (

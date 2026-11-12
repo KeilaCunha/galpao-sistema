@@ -48,11 +48,10 @@ export function resumoDestinos(destinos: DestinoEntrada[]): ResumoDestino {
 }
 
 /**
- * Qtd feita da linha: vendas realmente destinadas + reserva de estoque fraco
- * que ainda cabe no restante. A reserva não conta de novo depois que a sobra
- * for vendida na aba Sobras.
+ * Qtd feita da linha: vendas destinadas + caixas lançadas como sobra para o outro dia.
+ * A sobra conta mesmo quando a carga rendeu além da quantidade informada.
  */
-export function resumoAlocado(destinos: DestinoEntrada[], qtd: number | null): ResumoDestino {
+export function resumoAlocado(destinos: DestinoEntrada[], _qtd: number | null): ResumoDestino {
   const vendas: DestinoEntrada[] = [];
   const reservas: DestinoEntrada[] = [];
   for (const destino of destinos) {
@@ -60,13 +59,12 @@ export function resumoAlocado(destinos: DestinoEntrada[], qtd: number | null): R
     else vendas.push(destino);
   }
   const venda = resumoDestinos(vendas);
-  const reservaQtd = resumoDestinos(reservas).total;
-  const efetiva = qtd == null ? reservaQtd : Math.min(reservaQtd, Math.max(0, qtd - venda.total));
+  const reserva = resumoDestinos(reservas);
   return {
-    boa: venda.boa,
-    fraca: venda.fraca + efetiva,
+    boa: venda.boa + reserva.boa,
+    fraca: venda.fraca + reserva.fraca,
     perda: venda.perda,
-    total: venda.total + efetiva,
+    total: venda.total + reserva.total,
   };
 }
 

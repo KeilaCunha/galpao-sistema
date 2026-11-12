@@ -1,6 +1,6 @@
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import { abrevMercadoria, mercadoriasIguais } from "./abrev";
-import { ehTomate, tipoEhEstoque } from "./classificacao";
+import { ehTomate, qtdDestino, tipoEhEstoque } from "./classificacao";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
   return entrada.qtd;
@@ -157,7 +157,13 @@ export function qtdReservaEstoque(entrada: EntradaLancamento): number {
 }
 
 export function fracaEmEstoque(entrada: EntradaLancamento, ateData?: string): number {
-  return Math.min(qtdReservaEstoque(entrada), restanteEntradaDireto(entrada, ateData));
+  const destinos = destinosDa(entrada).filter((destino) =>
+    ateData ? dataDoDestino(destino, entrada) < ateData : true,
+  );
+  const fracaReserva = destinos
+    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .reduce((soma, destino) => soma + (destino.fraca ?? 0), 0);
+  return Math.min(fracaReserva, restanteEntradaDireto(entrada, ateData));
 }
 
 export function tipoPadraoDestino(
@@ -255,7 +261,14 @@ export function restanteEntradaDireto(entrada: EntradaLancamento, ateData?: stri
   const destinos = destinosDa(entrada).filter((destino) =>
     ateData ? dataDoDestino(destino, entrada) < ateData : true,
   );
-  return Math.max(0, capacidadeEntrada(entrada) - consumidoDaEntrada(destinos));
+  const vendidoFolha = consumidoDaEntrada(destinos.filter((destino) => destinoDaFolha(destino, entrada)));
+  const vendidoEstoque = consumidoDaEntrada(destinos.filter((destino) => !destinoDaFolha(destino, entrada)));
+  const reserva = destinos
+    .filter((destino) => tipoEhEstoque(destino.tipo))
+    .reduce((soma, destino) => soma + (qtdDestino(destino) ?? 0), 0);
+  const implicita = Math.max(0, capacidadeEntrada(entrada) - vendidoFolha);
+  const extraSobra = Math.max(0, reserva - implicita);
+  return Math.max(0, implicita + extraSobra - vendidoEstoque);
 }
 
 export function restanteEntrada(

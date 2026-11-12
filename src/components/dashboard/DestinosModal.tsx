@@ -127,7 +127,7 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                           ) : tipoEhEstoque(destino.tipo) ? (
                             <input
                               readOnly
-                              value="Estoque"
+                              value="Sobra"
                               className={`${modalInputClass} bg-warning-50 text-warning-700`}
                             />
                           ) : (
@@ -262,7 +262,7 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                     });
                   }}
                 >
-                  Sobra fraca no estoque
+                  Sobra
                 </Button>
               )}
             </div>
@@ -280,7 +280,7 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                     {total}{" "}
                     <span className="font-normal text-neutral-400">
                       ({r.boa} bom · {r.fraca} fraco
-                      {estoque > 0 ? ` · ${estoque} estoque fraco` : ""}
+                      {estoque > 0 ? ` · ${estoque} sobra` : ""}
                       {r.perda > 0 ? ` · ${r.perda} perda` : ""})
                     </span>
                   </p>
