@@ -22,7 +22,7 @@ import {
 } from "../utils/alocacao";
 import { destinoPersistivel } from "../utils/destino";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
-import { montarPorCliente, type ChipCliente } from "../utils/pedido";
+import { montarPorCliente, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
 
 type Aba = "folha" | "clientes" | "sobras" | "relatorios";
 
@@ -80,12 +80,74 @@ function ChipLinha({
   );
 }
 
+function tipoPedidoDaLinha(item: LinhaPorCliente): string {
+  if (item.feito.length !== 1) return "BOM";
+  const chip = item.feito[0];
+  if (chip.fraco) return "FRACO";
+  if (chip.chave === "boa") return "BOM";
+  return chip.chave;
+}
+
+function CampoPedido({
+  valor,
+  onDefinir,
+}: {
+  valor: number;
+  onDefinir: (qtd: number | null) => void;
+}) {
+  const [focado, setFocado] = useState(false);
+  const [rascunho, setRascunho] = useState("");
+  const mostrado = focado ? rascunho : valor > 0 ? String(valor) : "";
+  const preenchido = (focado ? rascunho : mostrado).trim().length > 0;
+
+  function aplicar(texto: string) {
+    const limpo = texto.trim().replace(",", ".");
+    if (!limpo) {
+      onDefinir(null);
+      return;
+    }
+    const quantidade = Number(limpo);
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
+      onDefinir(null);
+      return;
+    }
+    onDefinir(quantidade);
+  }
+
+  return (
+    <input
+      className={`h-9 w-[4.5rem] shrink-0 rounded-md border px-1.5 text-center text-sm font-semibold tabular-nums outline-none placeholder:font-normal ${
+        preenchido
+          ? "border-brand-300 bg-brand-50 text-neutral-900"
+          : "border-neutral-200 bg-white text-neutral-800 placeholder:text-neutral-400"
+      } focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-200`}
+      placeholder="—"
+      inputMode="numeric"
+      title="Quantidade que este cliente pediu desta mercadoria"
+      value={mostrado}
+      onFocus={() => {
+        setFocado(true);
+        setRascunho(valor > 0 ? String(valor) : "");
+      }}
+      onChange={(e) => setRascunho(e.target.value)}
+      onBlur={() => {
+        setFocado(false);
+        aplicar(rascunho);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+      }}
+    />
+  );
+}
+
 export default function Dashboard() {
   const {
     dataInicial,
     entradas,
     pedidos,
     addPedido,
+    definirPedido,
     removePedido,
     getLinhas,
     garantirLinhasDoDia,
@@ -386,17 +448,27 @@ export default function Dashboard() {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap items-center gap-1.5">
-                                {item.pedido.length === 0 ? (
-                                  <span className="text-xs text-neutral-400">—</span>
-                                ) : (
-                                  item.pedido.map((chip) => (
+                                <CampoPedido
+                                  valor={item.totalPedido}
+                                  onDefinir={(qtd) =>
+                                    definirPedido({
+                                      data,
+                                      cliente: grupo.cliente,
+                                      mercadoria: item.mercadoria,
+                                      tipo: tipoPedidoDaLinha(item),
+                                      qtd,
+                                    })
+                                  }
+                                />
+                                {item.pedido
+                                  .filter((chip) => chip.label || chip.fraco)
+                                  .map((chip) => (
                                     <ChipLinha
                                       key={chip.chave}
                                       chip={chip}
                                       onRemove={() => (chip.pedidoIds ?? []).forEach(removePedido)}
                                     />
-                                  ))
-                                )}
+                                  ))}
                                 {item.status === "bate" ? (
                                   <span className="text-[11px] font-bold uppercase tracking-wide text-success-600">
                                     bate
@@ -405,7 +477,7 @@ export default function Dashboard() {
                                   <span className="text-[11px] font-bold uppercase tracking-wide text-warning-700">
                                     falta {item.diferenca}
                                   </span>
-                                ) : item.status === "passou" ? (
+                                ) : item.status === "passou" && item.diferenca > 0 ? (
                                   <span className="text-[11px] font-bold uppercase tracking-wide text-danger-500">
                                     passou {item.diferenca}
                                   </span>

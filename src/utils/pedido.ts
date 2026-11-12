@@ -79,14 +79,7 @@ function statusLinha(feito: ChipCliente[], pedido: ChipCliente[]): Pick<LinhaPor
   const totalFeito = feito.reduce((soma, chip) => soma + chip.qtd, 0);
   const totalPedido = pedido.reduce((soma, chip) => soma + chip.qtd, 0);
   if (totalPedido <= 0) return { status: "sem-pedido", diferenca: 0 };
-  const porChave = new Map(pedido.map((chip) => [chip.chave, chip.qtd]));
-  let bateTipo = true;
-  for (const chip of feito) {
-    if ((porChave.get(chip.chave) ?? 0) !== chip.qtd) bateTipo = false;
-    porChave.delete(chip.chave);
-  }
-  if (porChave.size > 0) bateTipo = false;
-  if (bateTipo && totalFeito === totalPedido) return { status: "bate", diferenca: 0 };
+  if (totalFeito === totalPedido) return { status: "bate", diferenca: 0 };
   if (totalFeito < totalPedido) return { status: "falta", diferenca: totalPedido - totalFeito };
   return { status: "passou", diferenca: totalFeito - totalPedido };
 }

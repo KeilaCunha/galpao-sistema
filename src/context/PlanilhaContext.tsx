@@ -15,7 +15,7 @@ import {
   tipoPadraoDestino,
 } from "../utils/alocacao";
 import { destinoPersistivel } from "../utils/destino";
-import { pedidoExistente, pedidoPersistivel } from "../utils/pedido";
+import { mesmaChave, pedidoExistente, pedidoPersistivel } from "../utils/pedido";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
 import { loadFromStorage, removeFromStorage, saveToStorage } from "../utils/storage";
@@ -35,6 +35,7 @@ interface PlanilhaContextValue {
   updateEntrada: (id: string, patch: Partial<Omit<EntradaLancamento, "id">>) => void;
   removeEntrada: (id: string) => void;
   addPedido: (dados: Omit<PedidoCliente, "id">) => string;
+  definirPedido: (dados: Omit<PedidoCliente, "id" | "tipo"> & { tipo?: string; qtd: number | null }) => void;
   removePedido: (id: string) => void;
   addDestino: (entradaId: string, destino: Omit<DestinoEntrada, "id">) => void;
   updateDestino: (entradaId: string, destinoId: string, patch: Partial<Omit<DestinoEntrada, "id">>) => void;
@@ -533,6 +534,61 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         setPedidos((prev) => [...prev, pedido]);
         agendarSalvarPedido(pedido);
         return id;
+      },
+      definirPedido: (dados) => {
+        const daLinha = pedidosRef.current.filter(
+          (pedido) =>
+            pedido.data === dados.data &&
+            mesmaChave(pedido.cliente, dados.cliente) &&
+            mesmaChave(pedido.mercadoria, dados.mercadoria),
+        );
+        const quantidade = dados.qtd;
+        const apagar = (lista: PedidoCliente[]) => {
+          for (const pedido of lista) {
+            const timer = timers.current.get(pedido.id);
+            if (timer) window.clearTimeout(timer);
+            timers.current.delete(pedido.id);
+            if (bancoRef.current) {
+              marcarPendente(pedido.id);
+              void api.delete(`/pedidos/${pedido.id}`).finally(() => limparPendente(pedido.id));
+            }
+          }
+        };
+        if (quantidade == null || !Number.isFinite(quantidade) || quantidade <= 0) {
+          if (daLinha.length === 0) return;
+          apagar(daLinha);
+          const ids = new Set(daLinha.map((pedido) => pedido.id));
+          setPedidos((prev) => prev.filter((pedido) => !ids.has(pedido.id)));
+          return;
+        }
+        const tipo = daLinha[0]?.tipo || dados.tipo?.trim() || "BOM";
+        if (daLinha.length === 1 && daLinha[0].qtd === quantidade && mesmaChave(daLinha[0].tipo || "BOM", tipo)) {
+          return;
+        }
+        if (daLinha.length === 0) {
+          const id = generateId("ped");
+          const pedido: PedidoCliente = {
+            id,
+            data: dados.data,
+            cliente: dados.cliente,
+            mercadoria: dados.mercadoria,
+            tipo,
+            qtd: quantidade,
+          };
+          setPedidos((prev) => [...prev, pedido]);
+          agendarSalvarPedido(pedido);
+          return;
+        }
+        const [primeiro, ...resto] = daLinha;
+        const atualizado: PedidoCliente = { ...primeiro, qtd: quantidade, tipo };
+        const idsResto = new Set(resto.map((pedido) => pedido.id));
+        apagar(resto);
+        setPedidos((prev) =>
+          prev
+            .filter((pedido) => !idsResto.has(pedido.id))
+            .map((pedido) => (pedido.id === primeiro.id ? atualizado : pedido)),
+        );
+        agendarSalvarPedido(atualizado);
       },
       removePedido: (id) => {
         const timer = timers.current.get(id);
