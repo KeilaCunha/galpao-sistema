@@ -1,6 +1,7 @@
 import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, SaidaLancamento } from "../types";
 import { abrevMercadoria, mercadoriasIguais } from "./abrev";
 import { destinoEhSobra, ehTomate, qtdDestino } from "./classificacao";
+import { addDays } from "./format";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
   return entrada.qtd;
@@ -363,7 +364,8 @@ export function sobrasAtuais(entradas: EntradaLancamento[]) {
 
 /** Sobra ainda em estoque, agrupada por dia — na ordem em que a carga foi lançada.
  *  Só entra no estoque no dia seguinte ao lançamento, nunca na folha do mesmo dia.
- *  A quantidade é a sobra original lançada no destino do dia anterior. */
+ *  No dia da folha, a coluna mostra o que estava em estoque de manhã.
+ *  Se a sobra já foi toda destinada num dia anterior, some da lista. */
 export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) {
   const porDia = new Map<
     string,
@@ -372,15 +374,17 @@ export function sobrasPorDia(entradas: EntradaLancamento[], dataFolha?: string) 
 
   for (const item of sobrasAtuais(entradas)) {
     if (dataFolha && item.entrada.data >= dataFolha) continue;
-    if (item.original <= 0 && item.restante <= 0) continue;
+    const abertura = dataFolha ? restanteEntradaDireto(item.entrada, dataFolha) : item.original;
+    if (abertura <= 0) continue;
+    const restante = dataFolha ? restanteEntradaDireto(item.entrada, addDays(dataFolha, 1)) : item.restante;
     const dia = item.entrada.data;
     const lista = porDia.get(dia) ?? [];
     lista.push({
       entradaId: item.entrada.id,
       produtor: item.entrada.produtor || "Sem fornecedor",
       mercadoria: item.entrada.mercadoria,
-      restante: item.restante,
-      original: item.original,
+      restante,
+      original: abertura,
       fraca: fracaEmEstoque(item.entrada, dataFolha),
     });
     porDia.set(dia, lista);

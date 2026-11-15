@@ -189,9 +189,9 @@ export default function Dashboard() {
         entradaId: entrada.id,
         produtor: entrada.produtor || "Sem fornecedor",
         mercadoria: entrada.mercadoria,
-        restante: restanteEntradaDireto(entrada),
-        original: sobraOriginal(entrada),
-        fraca: fracaEmEstoque(entrada),
+        restante: restanteEntradaDireto(entrada, addDays(data, 1)),
+        original: restanteEntradaDireto(entrada, data) || sobraOriginal(entrada),
+        fraca: fracaEmEstoque(entrada, data),
         abrev: abrevMercadoria(entrada.mercadoria),
       });
       grupos.set(entrada.data, lista);
