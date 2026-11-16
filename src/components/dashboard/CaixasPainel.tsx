@@ -69,6 +69,28 @@ function CampoQtd({
   );
 }
 
+function Card({
+  label,
+  value,
+  cor,
+}: {
+  label: string;
+  value: number;
+  cor?: "success" | "warning" | "danger";
+}) {
+  const cores = {
+    success: "text-success-600",
+    warning: "text-warning-600",
+    danger: "text-danger-500",
+  };
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+      <p className={`text-2xl font-bold tabular-nums ${cor ? cores[cor] : "text-neutral-800"}`}>{value}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
+    </div>
+  );
+}
+
 function detalheTipos(partes: { tipo: string; qtd: number }[]): string {
   return partes
     .filter((item) => item.qtd > 0)
