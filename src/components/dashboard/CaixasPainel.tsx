@@ -8,7 +8,6 @@ import {
   montarRelatorioCaixas,
   movimentoDoDia,
   nomesTipoCaixa,
-  resumoCaixasDia,
   saldoCaixas,
   veioNaFolha,
 } from "../../utils/caixas";
@@ -67,31 +66,6 @@ function CampoQtd({
         if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
       }}
     />
-  );
-}
-
-function Card({
-  label,
-  value,
-  dica,
-  cor,
-}: {
-  label: string;
-  value: number;
-  dica?: string;
-  cor?: "success" | "warning" | "danger";
-}) {
-  const cores = {
-    success: "text-success-600",
-    warning: "text-warning-600",
-    danger: "text-danger-500",
-  };
-  return (
-    <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-      <p className={`text-2xl font-bold tabular-nums ${cor ? cores[cor] : "text-neutral-800"}`}>{value}</p>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      {dica ? <p className="mt-0.5 text-[11px] text-neutral-400">{dica}</p> : null}
-    </div>
   );
 }
 
@@ -184,12 +158,6 @@ export function CaixasPainel({ dia }: { dia: string }) {
         return a.nome.localeCompare(b.nome, "pt-BR");
       });
   }, [cadastrados, caixas, dia, entradas, busca, nomesTipo, tiposAbertos, adicionados]);
-
-  const resumo = useMemo(() => resumoCaixasDia(caixas, entradas, dia), [caixas, entradas, dia]);
-  const comEles = useMemo(
-    () => linhas.reduce((soma, linha) => soma + (linha.estoque > 0 ? linha.estoque : 0), 0),
-    [linhas],
-  );
 
   const inicio = de <= ate ? de : ate;
   const fim = de <= ate ? ate : de;
@@ -294,19 +262,6 @@ export function CaixasPainel({ dia }: { dia: string }) {
         </div>
         {erroTipo ? <p className="mt-2 text-xs font-medium text-danger-500">{erroTipo}</p> : null}
       </section>
-
-      {resumo.veio > 0 || resumo.pegou > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Card label="Veio na carga" value={resumo.veio} dica="Sai sozinho da folha do dia" />
-          <Card label="Ele pegou" value={resumo.pegou} dica="O que você anota aqui" />
-          <Card
-            label="Ficou com ele"
-            value={comEles}
-            dica="Pegou menos o que veio"
-            cor={comEles > 0 ? "warning" : undefined}
-          />
-        </div>
-      ) : null}
 
       <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-100 px-4 py-3">
