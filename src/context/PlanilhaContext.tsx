@@ -3,7 +3,15 @@ import { api, apiRemota, checarBanco, consumirLiberacao, ErroApi, tokenLiberacao
 import { idsPendentes, limparPendente, marcarPendente, ouvirSync, registrarVersao } from "../api/sync";
 import { useAuth } from "./AuthContext";
 import { useToast } from "./ToastContext";
-import type { DestinoEntrada, EntradaLancamento, LinhaPlanilha, PedidoCliente, SaidaLancamento } from "../types";
+import type {
+  DestinoEntrada,
+  EntradaLancamento,
+  LinhaPlanilha,
+  MovimentoCaixa,
+  PedidoCliente,
+  SaidaLancamento,
+  TipoCaixa,
+} from "../types";
 import {
   destinosDaFolhaNoDia,
   destinosDoEstoqueNoDia,
@@ -14,6 +22,14 @@ import {
   sobrasPorDia,
   tipoPadraoDestino,
 } from "../utils/alocacao";
+import {
+  caixaPersistivel,
+  ehTipoCaixaPadrao,
+  mesmaPessoa,
+  mesmoTipoCaixa,
+  tipoCaixaDaEntrada,
+  tipoCaixaPersistivel,
+} from "../utils/caixas";
 import { destinoPersistivel } from "../utils/destino";
 import { mesmaChave, pedidoExistente, pedidoPersistivel } from "../utils/pedido";
 import { toISODate } from "../utils/format";
@@ -25,6 +41,8 @@ export type StatusBanco = "conectando" | "vivo" | "local";
 interface PlanilhaContextValue {
   entradas: EntradaLancamento[];
   pedidos: PedidoCliente[];
+  caixas: MovimentoCaixa[];
+  tiposCaixa: TipoCaixa[];
   dataInicial: string;
   usandoBanco: boolean;
   statusBanco: StatusBanco;
@@ -39,6 +57,9 @@ interface PlanilhaContextValue {
     dados: Omit<PedidoCliente, "id" | "tipo" | "qtd"> & { tipo?: string; qtd: number | null },
   ) => void;
   removePedido: (id: string) => void;
+  definirCaixa: (data: string, fornecedor: string, tipo: string, pegou: number) => void;
+  addTipoCaixa: (nome: string) => boolean;
+  removeTipoCaixa: (id: string) => void;
   addDestino: (entradaId: string, destino: Omit<DestinoEntrada, "id">) => void;
   updateDestino: (entradaId: string, destinoId: string, patch: Partial<Omit<DestinoEntrada, "id">>) => void;
   removeDestino: (entradaId: string, destinoId: string) => void;
@@ -121,6 +142,8 @@ function entradaPersistivel(entrada: EntradaLancamento): boolean {
       (entrada.preco != null && entrada.preco > 0) ||
       (entrada.precoFraco != null && entrada.precoFraco > 0) ||
       entrada.observacao?.trim() ||
+      entrada.feitaBoa != null ||
+      entrada.feitaFraca != null ||
       (entrada.destinos ?? []).some(destinoPersistivel),
   );
 }
@@ -174,7 +197,10 @@ function mesmaEntrada(a: EntradaLancamento, b: EntradaLancamento): boolean {
     a.preco === b.preco &&
     a.precoFraco === b.precoFraco &&
     a.rendimentoExtra === b.rendimentoExtra &&
+    (a.feitaBoa ?? null) === (b.feitaBoa ?? null) &&
+    (a.feitaFraca ?? null) === (b.feitaFraca ?? null) &&
     (a.observacao ?? "") === (b.observacao ?? "") &&
+    tipoCaixaDaEntrada(a) === tipoCaixaDaEntrada(b) &&
     JSON.stringify(a.destinos ?? []) === JSON.stringify(b.destinos ?? [])
   );
 }
@@ -207,6 +233,52 @@ function lembrarObservacao(id: string, texto: string | undefined) {
   saveToStorage("entrada-obs-v1", mapa);
 }
 
+function lembrarTipoCaixa(id: string, tipo: string | undefined) {
+  const mapa = loadFromStorage<Record<string, string>>("entrada-tipo-caixa-v1", {});
+  const limpo = tipo?.trim() ?? "";
+  if (!limpo || ehTipoCaixaPadrao(limpo)) delete mapa[id];
+  else mapa[id] = limpo;
+  saveToStorage("entrada-tipo-caixa-v1", mapa);
+}
+
+function tipoCaixaGuardado(
+  local: EntradaLancamento,
+  remota?: EntradaLancamento,
+  guardadas?: Record<string, string>,
+): string | undefined {
+  const lembrada = guardadas?.[local.id]?.trim();
+  if (lembrada) return lembrada;
+  const daTela = local.tipoCaixa?.trim();
+  if (daTela) return daTela;
+  const doBanco = remota?.tipoCaixa?.trim();
+  return doBanco || undefined;
+}
+
+type FeitaGuardada = { boa: number | null; fraca: number | null };
+
+function lembrarFeita(id: string, boa: number | null | undefined, fraca: number | null | undefined) {
+  const mapa = loadFromStorage<Record<string, FeitaGuardada>>("entrada-feita-v1", {});
+  if (boa == null && fraca == null) delete mapa[id];
+  else mapa[id] = { boa: boa ?? null, fraca: fraca ?? null };
+  saveToStorage("entrada-feita-v1", mapa);
+}
+
+function feitaDaEntrada(
+  local: EntradaLancamento,
+  remota?: EntradaLancamento,
+  guardadas?: Record<string, FeitaGuardada>,
+): { feitaBoa?: number | null; feitaFraca?: number | null } {
+  const lembrada = guardadas?.[local.id];
+  if (lembrada) return { feitaBoa: lembrada.boa, feitaFraca: lembrada.fraca };
+  if (local.feitaBoa != null || local.feitaFraca != null) {
+    return { feitaBoa: local.feitaBoa, feitaFraca: local.feitaFraca };
+  }
+  if (remota?.feitaBoa != null || remota?.feitaFraca != null) {
+    return { feitaBoa: remota.feitaBoa, feitaFraca: remota.feitaFraca };
+  }
+  return {};
+}
+
 function mesclarEntradas(
   local: EntradaLancamento[],
   remoto: EntradaLancamento[],
@@ -216,6 +288,8 @@ function mesclarEntradas(
   const vistos = new Set<string>();
   const resultado: EntradaLancamento[] = [];
   const obsGuardadas = loadFromStorage<Record<string, string>>("entrada-obs-v1", {});
+  const feitaGuardadas = loadFromStorage<Record<string, FeitaGuardada>>("entrada-feita-v1", {});
+  const tipoGuardadas = loadFromStorage<Record<string, string>>("entrada-tipo-caixa-v1", {});
 
   for (const entrada of local) {
     if (pendentes.has(entrada.id)) {
@@ -228,7 +302,9 @@ function mesclarEntradas(
       resultado.push({
         ...remota,
         observacao: obsDaEntrada(entrada, remota, obsGuardadas),
+        tipoCaixa: tipoCaixaGuardado(entrada, remota, tipoGuardadas),
         destinos: mesclarDestinos(entrada.destinos ?? [], remota.destinos ?? []),
+        ...feitaDaEntrada(entrada, remota, feitaGuardadas),
       });
       vistos.add(entrada.id);
       continue;
@@ -244,6 +320,8 @@ function mesclarEntradas(
       resultado.push({
         ...entrada,
         observacao: entrada.observacao?.trim() || obsGuardadas[entrada.id] || undefined,
+        tipoCaixa: tipoCaixaGuardado(entrada, entrada, tipoGuardadas),
+        ...feitaDaEntrada(entrada, entrada, feitaGuardadas),
       });
     }
   }
@@ -272,6 +350,12 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   const [entradas, setEntradas] = useState<EntradaLancamento[]>(estadoInicialEntradas);
   const [pedidos, setPedidos] = useState<PedidoCliente[]>(() =>
     apiRemota ? [] : loadFromStorage("pedidos-v1", []),
+  );
+  const [caixas, setCaixas] = useState<MovimentoCaixa[]>(() =>
+    loadFromStorage("caixas-v1", []).filter(caixaPersistivel),
+  );
+  const [tiposCaixa, setTiposCaixa] = useState<TipoCaixa[]>(() =>
+    loadFromStorage("tipos-caixa-v1", []).filter(tipoCaixaPersistivel),
   );
   const [statusBanco, setStatusBanco] = useState<StatusBanco>("conectando");
   const [gravadas, setGravadas] = useState<Record<string, EntradaLancamento>>({});
@@ -364,6 +448,14 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     saveToStorage("pedidos-v1", pedidos.filter(pedidoPersistivel));
   }, [pedidos, usandoBanco]);
 
+  useEffect(() => {
+    saveToStorage("caixas-v1", caixas.filter(caixaPersistivel));
+  }, [caixas]);
+
+  useEffect(() => {
+    saveToStorage("tipos-caixa-v1", tiposCaixa.filter(tipoCaixaPersistivel));
+  }, [tiposCaixa]);
+
   function agendarSalvar(entrada: EntradaLancamento) {
     if (!bancoRef.current) return;
     marcarPendente(entrada.id);
@@ -441,6 +533,8 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     () => ({
       entradas,
       pedidos,
+      caixas,
+      tiposCaixa,
       dataInicial: toISODate(),
       usandoBanco,
       statusBanco,
@@ -456,6 +550,15 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       },
       updateEntrada: (id, patch) => {
         if ("observacao" in patch) lembrarObservacao(id, patch.observacao);
+        if ("tipoCaixa" in patch) lembrarTipoCaixa(id, patch.tipoCaixa);
+        if ("feitaBoa" in patch || "feitaFraca" in patch) {
+          const atual = entradasRef.current.find((entrada) => entrada.id === id);
+          lembrarFeita(
+            id,
+            "feitaBoa" in patch ? patch.feitaBoa : atual?.feitaBoa,
+            "feitaFraca" in patch ? patch.feitaFraca : atual?.feitaFraca,
+          );
+        }
         setEntradas((prev) => {
           const proxima = prev.map((entrada) => (entrada.id === id ? { ...entrada, ...patch } : entrada));
           const atualizada = proxima.find((entrada) => entrada.id === id);
@@ -468,6 +571,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
         if (timer) window.clearTimeout(timer);
         timers.current.delete(id);
         lembrarObservacao(id, "");
+        lembrarFeita(id, null, null);
         const snapshot = gravadasRef.current[id];
         setEntradas((prev) => prev.filter((entrada) => entrada.id !== id));
         if (bancoRef.current) {
@@ -516,6 +620,48 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
           if (atualizada) agendarSalvar(atualizada);
           return proxima;
         });
+      },
+      definirCaixa: (data, fornecedor, tipo, pegou) => {
+        const nome = fornecedor.trim();
+        const tipoNome = tipo.trim();
+        if (!nome || !tipoNome) return;
+        const pegouN = Number.isFinite(pegou) && pegou > 0 ? pegou : 0;
+        setCaixas((prev) => {
+          const indice = prev.findIndex(
+            (item) =>
+              item.data === data &&
+              mesmaPessoa(item.fornecedor, nome) &&
+              mesmoTipoCaixa(item.tipo ?? "", tipoNome),
+          );
+          if (pegouN <= 0) {
+            if (indice < 0) return prev;
+            return prev.filter((_, i) => i !== indice);
+          }
+          if (indice >= 0) {
+            const atual = prev[indice];
+            if (atual.pegou === pegouN && atual.fornecedor === nome && atual.tipo === tipoNome) {
+              return prev;
+            }
+            const proxima = [...prev];
+            proxima[indice] = { ...atual, fornecedor: nome, tipo: tipoNome, veio: 0, pegou: pegouN };
+            return proxima;
+          }
+          return [...prev, { id: generateId("cx"), data, fornecedor: nome, tipo: tipoNome, veio: 0, pegou: pegouN }];
+        });
+      },
+      addTipoCaixa: (nome) => {
+        const limpo = nome.trim();
+        if (!limpo) return false;
+        let criou = false;
+        setTiposCaixa((prev) => {
+          if (prev.some((tipo) => mesmoTipoCaixa(tipo.nome, limpo))) return prev;
+          criou = true;
+          return [...prev, { id: generateId("tcx"), nome: limpo }];
+        });
+        return criou;
+      },
+      removeTipoCaixa: (id) => {
+        setTiposCaixa((prev) => prev.filter((tipo) => tipo.id !== id));
       },
       addPedido: (dados) => {
         const existente = pedidoExistente(
@@ -647,7 +793,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       resumo: (data) => resumoDoDia(entradas, data),
       sobras: (data) => sobrasPorDia(entradas, data),
     }),
-    [entradas, pedidos, saidas, usandoBanco, statusBanco, gravadas],
+    [entradas, pedidos, caixas, tiposCaixa, saidas, usandoBanco, statusBanco, gravadas],
   );
 
   return <PlanilhaContext.Provider value={value}>{children}</PlanilhaContext.Provider>;

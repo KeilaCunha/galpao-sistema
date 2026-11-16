@@ -4,7 +4,7 @@ import { destinoEhSobra, ehTomate, qtdDestino } from "./classificacao";
 import { addDays } from "./format";
 
 export function capacidadeEntrada(entrada: EntradaLancamento): number {
-  return entrada.qtd;
+  return entrada.qtd + (entrada.rendimentoExtra ?? 0);
 }
 
 export function entradaValida(entrada: EntradaLancamento): boolean {
@@ -333,7 +333,11 @@ export function montarLinhas(entradas: EntradaLancamento[], data: string): Linha
       preco: entrada.preco,
       precoFraco: entrada.precoFraco ?? null,
       destinos: destinosDa(entrada),
+      rendimentoExtra: entrada.rendimentoExtra,
+      feitaBoa: entrada.feitaBoa,
+      feitaFraca: entrada.feitaFraca,
       observacao: entrada.observacao,
+      tipoCaixa: entrada.tipoCaixa,
     }));
 }
 

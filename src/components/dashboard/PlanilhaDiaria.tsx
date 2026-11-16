@@ -1,4 +1,4 @@
-import { Plus, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AutorizarModal } from "../auth/AutorizarModal";
 import { CampoTravado } from "../auth/CampoTravado";
@@ -9,8 +9,17 @@ import { useToast } from "../../context/ToastContext";
 import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import type { CampoTrava } from "../../utils/permissoes";
 import { campoTravado, ehResponsavel } from "../../utils/permissoes";
+import { abrevCliente } from "../../utils/abrev";
 import { destinoEhSobra, ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
-import { calcularRendimento, calcularSobra, destinoPersistivel, resumoAlocado, statusQtdFeita } from "../../utils/destino";
+import {
+  calcularRendimento,
+  calcularSobra,
+  destinoTemQuantidade,
+  extraDeFeita,
+  resumoQtdFeita,
+  statusQtdFeita,
+} from "../../utils/destino";
+import { ehTipoCaixaPadrao, nomesTipoCaixa, tipoCaixaDaEntrada } from "../../utils/caixas";
 import { formatPreco, parsePreco } from "../../utils/format";
 import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
@@ -30,7 +39,7 @@ interface PlanilhaDiariaProps {
 }
 
 export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
-  const { entradas, addEntrada, updateEntrada, removeEntrada, garantirLinhasDoDia, entradaGravada } = usePlanilha();
+  const { entradas, addEntrada, updateEntrada, removeEntrada, garantirLinhasDoDia, entradaGravada, tiposCaixa } = usePlanilha();
   const { produtos, fornecedores } = useData();
   const { usuario, travas, modoLivre, estaLiberado, pode, verColuna } = useAuth();
   const vis = {
@@ -45,17 +54,24 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
   const { showInfo } = useToast();
 
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editandoFeitaId, setEditandoFeitaId] = useState<string | null>(null);
+  const [editandoTipoId, setEditandoTipoId] = useState<string | null>(null);
   const [excluirId, setExcluirId] = useState<string | null>(null);
   const [pedido, setPedido] = useState<{ id: string; campos: CampoTrava[] } | null>(null);
   const [filtroProdutor, setFiltroProdutor] = useState("");
   const [filtroMercadoria, setFiltroMercadoria] = useState("");
+  const [filtroCliente, setFiltroCliente] = useState("");
+  const podeEditarFeita = ehResponsavel(usuario) || modoLivre;
   const sentinelaRef = useRef<HTMLDivElement>(null);
 
-  const filtrando = Boolean(filtroProdutor.trim() || filtroMercadoria.trim());
+  const filtrando = Boolean(filtroProdutor.trim() || filtroMercadoria.trim() || filtroCliente.trim());
 
   useEffect(() => {
     setFiltroProdutor("");
     setFiltroMercadoria("");
+    setFiltroCliente("");
+    setEditandoFeitaId(null);
+    setEditandoTipoId(null);
   }, [data]);
 
   const linhasVisiveis = useMemo(() => {
@@ -63,12 +79,14 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
     return linhas.filter((linha) => {
       const temDado = linha.produtor.trim() || linha.mercadoria.trim() || (linha.qtd ?? 0) > 0;
       if (!temDado) return false;
-      return (
-        correspondeBusca(linha.produtor, filtroProdutor) &&
-        correspondeBusca(linha.mercadoria, filtroMercadoria)
-      );
+      if (!correspondeBusca(linha.produtor, filtroProdutor)) return false;
+      if (!correspondeBusca(linha.mercadoria, filtroMercadoria)) return false;
+      if (filtroCliente.trim()) {
+        return destinosDaFolha(linha, data).some((destino) => correspondeCliente(destino, filtroCliente));
+      }
+      return true;
     });
-  }, [linhas, filtroProdutor, filtroMercadoria, filtrando]);
+  }, [linhas, filtroProdutor, filtroMercadoria, filtroCliente, filtrando, data]);
 
   useEffect(() => {
     const sentinela = sentinelaRef.current;
@@ -127,16 +145,16 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
+        <table className="w-full min-w-[72rem] border-collapse text-sm">
           <thead>
             <tr className="bg-neutral-50">
-              {vis.produtor && <th className="w-[22%] min-w-[9rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Produtor</th>}
-              {vis.qtd && <th className="w-16 border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>}
-              {vis.qtdFeita && <th className="w-[13%] min-w-[8rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>}
-              {vis.mercadoria && <th className="w-[18%] min-w-[8rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>}
-              {vis.preco && <th className="w-[9.75rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>}
-              {vis.destino && <th className="w-[32%] min-w-[12rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Destino</th>}
-              <th className="w-10 border-b border-neutral-200" />
+              {vis.produtor && <th className="min-w-[10rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Produtor</th>}
+              {vis.qtd && <th className="w-[5.25rem] min-w-[5.25rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd</th>}
+              {vis.qtdFeita && <th className="min-w-[10.5rem] whitespace-nowrap border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Qtd feita</th>}
+              {vis.mercadoria && <th className="min-w-[9rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Merc.</th>}
+              {vis.preco && <th className="w-[12.5rem] min-w-[12.5rem] whitespace-nowrap border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Preço</th>}
+              {vis.destino && <th className="min-w-[16rem] border-b border-neutral-200 px-2 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-neutral-400">Destino</th>}
+              <th className="w-10 min-w-10 border-b border-neutral-200" />
             </tr>
             <tr className="bg-white">
               {vis.produtor && (
@@ -160,19 +178,23 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                 </th>
               )}
               {vis.preco && <th className="border-b border-neutral-200" />}
-              {vis.destino && <th className="border-b border-neutral-200" />}
+              {vis.destino && (
+                <th className="border-b border-neutral-200 p-1 font-normal">
+                  <CampoFiltro
+                    value={filtroCliente}
+                    onChange={setFiltroCliente}
+                    placeholder="Pesquisar cliente"
+                  />
+                </th>
+              )}
               <th className="border-b border-neutral-200" />
             </tr>
           </thead>
           <tbody>
             {linhasVisiveis.map((linha) => {
-              const resumo = resumoAlocado(linha.destinos, linha.qtd);
-              const destinosDia = linha.destinos.filter(
-                (destino) =>
-                  (destino.data || data) === data &&
-                  destino.origem !== "estoque" &&
-                  !destinoEhSobra(destino) &&
-                  destinoPersistivel(destino),
+              const resumo = resumoQtdFeita(linha);
+              const destinosDia = destinosDaFolha(linha, data).filter((destino) =>
+                filtroCliente.trim() ? correspondeCliente(destino, filtroCliente) : true,
               );
               const status = statusQtdFeita(linha.qtd, resumo);
               const sobra = calcularSobra(linha.qtd, resumo);
@@ -197,29 +219,91 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   {vis.qtd && (
                   <td className="p-1 align-top">
                     <CampoTravado travado={travado(linha.id, "qtd")} onLiberar={() => setPedido({ id: linha.id, campos: ["qtd"] })}>
-                      <input
-                        type="number"
-                        min={0}
-                        className={cellClass}
-                        value={linha.qtd || ""}
-                        onChange={(e) =>
-                          updateEntrada(linha.id, { qtd: e.target.value === "" ? 0 : Number(e.target.value) })
-                        }
-                        placeholder="0"
-                        disabled={travado(linha.id, "qtd")}
-                      />
+                      <div className="leading-tight">
+                        <input
+                          type="number"
+                          min={0}
+                          className={cellClass}
+                          value={linha.qtd || ""}
+                          onChange={(e) =>
+                            updateEntrada(linha.id, { qtd: e.target.value === "" ? 0 : Number(e.target.value) })
+                          }
+                          placeholder="0"
+                          disabled={travado(linha.id, "qtd")}
+                        />
+                        <CampoTipoCaixa
+                          tipo={tipoCaixaDaEntrada(linha)}
+                          tipos={nomesTipoCaixa(tiposCaixa)}
+                          editando={editandoTipoId === linha.id}
+                          disabled={travado(linha.id, "qtd")}
+                          onEditar={() => setEditandoTipoId(linha.id)}
+                          onPronto={() => setEditandoTipoId(null)}
+                          onChange={(tipoCaixa) => {
+                            updateEntrada(linha.id, { tipoCaixa });
+                            setEditandoTipoId(null);
+                          }}
+                        />
+                      </div>
                     </CampoTravado>
                   </td>
                   )}
                   {vis.qtdFeita && (
-                  <td className="px-2 py-2 align-top">
-                    {status === "vazio" ? (
-                      <span className="text-neutral-300">—</span>
+                  <td className="p-1 align-top">
+                    {podeEditarFeita && editandoFeitaId === linha.id ? (
+                      <div className="leading-tight">
+                        <div className="flex items-center gap-0.5">
+                          <CampoQtdFeita
+                            boa={linha.feitaBoa ?? (resumo.boa || null)}
+                            fraca={linha.feitaFraca ?? (resumo.fraca || null)}
+                            onChange={(boa, fraca) => {
+                              const extra = extraDeFeita(linha.qtd, linha.destinos, boa, fraca);
+                              updateEntrada(linha.id, {
+                                feitaBoa: boa,
+                                feitaFraca: fraca,
+                                rendimentoExtra: extra || undefined,
+                              });
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditandoFeitaId(null)}
+                            className="rounded-md p-1 text-success-600 hover:bg-success-50"
+                            title="Pronto"
+                          >
+                            <Check size={14} />
+                          </button>
+                        </div>
+                        {status === "parcial" && (
+                          <p className="mt-0.5 text-xs font-medium text-danger-500">falta fazer {sobra}</p>
+                        )}
+                        {(status === "completo" || status === "excedente") && (
+                          <p className="mt-0.5 text-xs font-medium text-success-600">completo</p>
+                        )}
+                        {rendeu > 0 && (
+                          <p className="text-xs font-medium text-brand-600">
+                            rendeu {rendeu} {rendeu === 1 ? "caixa" : "caixas"}
+                          </p>
+                        )}
+                      </div>
+                    ) : status === "vazio" ? (
+                      <div className="flex h-9 items-center gap-1">
+                        <span className="text-neutral-300">—</span>
+                        {podeEditarFeita && (
+                          <button
+                            type="button"
+                            onClick={() => setEditandoFeitaId(linha.id)}
+                            className="rounded-md p-1 text-neutral-400 hover:bg-brand-50 hover:text-brand-600"
+                            title="Editar quantidade feita"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <div className="leading-tight">
                         <p className="font-semibold text-neutral-800">
                           {ehTomate(linha.mercadoria) ? (
-                            <QtdFeitaTomate destinos={linha.destinos} qtd={linha.qtd} />
+                            <QtdFeitaTomate destinos={linha.destinos} qtd={linha.qtd} extra={linha.rendimentoExtra} />
                           ) : (
                             <>
                               {resumo.boa}
@@ -233,6 +317,16 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                                 <span className="text-danger-500"> + {resumo.perda} perda</span>
                               )}
                             </>
+                          )}
+                          {podeEditarFeita && (
+                            <button
+                              type="button"
+                              onClick={() => setEditandoFeitaId(linha.id)}
+                              className="ml-1 inline-flex align-text-top text-neutral-400 hover:text-brand-600"
+                              title="Editar quantidade feita"
+                            >
+                              <Pencil size={12} />
+                            </button>
                           )}
                         </p>
                         {status === "parcial" && (
@@ -266,9 +360,9 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   </td>
                   )}
                   {vis.preco && (
-                  <td className="p-1 align-top">
+                  <td className="whitespace-nowrap p-1 align-top">
                     <CampoTravado travado={travado(linha.id, "preco")} onLiberar={() => setPedido({ id: linha.id, campos: ["preco"] })}>
-                      <div className="flex w-max items-center gap-0.5">
+                      <div className="flex flex-nowrap items-center gap-1">
                         <CampoPreco
                           value={linha.preco}
                           onChange={(preco) => updateEntrada(linha.id, { preco })}
@@ -286,9 +380,10 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                   <td className="px-1.5 py-1.5 align-top">
                     <div className="flex min-h-[36px] items-start gap-1">
                       <div
-                        className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-1 rounded-lg p-1 transition hover:bg-neutral-50"
+                        className="flex min-h-[36px] min-w-[5.5rem] flex-1 cursor-pointer flex-wrap items-center gap-1 rounded-lg p-1 transition hover:bg-neutral-50"
                         onClick={() => {
-                          if (pode("destinos")) setEditandoId(linha.id);
+                          if (!pode("destinos")) return;
+                          setEditandoId(linha.id);
                         }}
                         title={pode("destinos") ? "Clique para informar destinos" : "Sem acesso aos destinos"}
                       >
@@ -364,6 +459,7 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
       </div>
 
       <DestinosModal
+        key={editandoId ?? "fechado"}
         open={!!editandoId}
         onClose={() => setEditandoId(null)}
         entrada={entradaModal}
@@ -401,10 +497,24 @@ function semAcento(valor: string): string {
     .trim();
 }
 
+function destinosDaFolha(linha: LinhaPlanilha, data: string): DestinoEntrada[] {
+  return linha.destinos.filter(
+    (destino) =>
+      (destino.data || data) === data &&
+      destino.origem !== "estoque" &&
+      !destinoEhSobra(destino) &&
+      destinoTemQuantidade(destino),
+  );
+}
+
 function correspondeBusca(texto: string, termo: string): boolean {
   const busca = semAcento(termo);
   if (!busca) return true;
   return semAcento(texto).includes(busca);
+}
+
+function correspondeCliente(destino: DestinoEntrada, termo: string): boolean {
+  return correspondeBusca(destino.cliente, termo) || correspondeBusca(abrevCliente(destino.cliente), termo);
 }
 
 function CampoFiltro({
@@ -466,14 +576,14 @@ function CampoPreco({
 
   return (
     <label
-      className={`flex h-9 items-center rounded-md px-0.5 focus-within:bg-brand-50/70 focus-within:ring-2 focus-within:ring-brand-300 ${
-        fraco ? "w-[4.85rem] text-warning-700" : "w-[4.15rem] text-neutral-700"
+      className={`inline-flex h-9 shrink-0 flex-nowrap items-center gap-0.5 rounded-md px-1 focus-within:bg-brand-50/70 focus-within:ring-2 focus-within:ring-brand-300 ${
+        fraco ? "text-warning-700" : "text-neutral-700"
       }`}
     >
       <span className={`shrink-0 text-[11px] font-semibold ${fraco ? "text-warning-600" : "text-neutral-500"}`}>R$</span>
       <input
         inputMode="decimal"
-        className="h-full w-10 min-w-0 bg-transparent px-0.5 text-sm tabular-nums outline-none placeholder:text-neutral-300"
+        className="h-full w-[3.25rem] shrink-0 bg-transparent px-0.5 text-sm tabular-nums outline-none placeholder:text-neutral-300"
         value={texto}
         onChange={(e) => {
           const valor = e.target.value;
@@ -492,13 +602,114 @@ function CampoPreco({
         }}
         placeholder="0,00"
       />
-      {fraco ? <span className="shrink-0 text-[10px] font-extrabold uppercase text-warning-600">fr</span> : null}
+      {fraco ? <span className="shrink-0 text-[10px] font-extrabold uppercase leading-none text-warning-600">fr</span> : null}
     </label>
   );
 }
 
-function QtdFeitaTomate({ destinos, qtd }: { destinos: DestinoEntrada[]; qtd: number | null }) {
-  const feita = resumoFeitaTomate(destinos, qtd);
+function CampoTipoCaixa({
+  tipo,
+  tipos,
+  editando,
+  disabled,
+  onEditar,
+  onPronto,
+  onChange,
+}: {
+  tipo: string;
+  tipos: string[];
+  editando: boolean;
+  disabled: boolean;
+  onEditar: () => void;
+  onPronto: () => void;
+  onChange: (tipo: string) => void;
+}) {
+  if (editando && !disabled) {
+    return (
+      <select
+        autoFocus
+        className="mt-0.5 h-[18px] w-full cursor-pointer rounded border border-brand-400 bg-brand-50 px-0.5 text-[9px] font-bold uppercase tracking-wide text-neutral-700 outline-none"
+        value={tipo}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onPronto}
+      >
+        {tipos.map((nome) => (
+          <option key={nome} value={nome}>
+            {nome.toUpperCase()}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onEditar}
+      title="Apertar para escolher o tipo de caixa"
+      className={`mt-0.5 inline-flex h-[18px] w-full items-center justify-between gap-px rounded border px-1 text-[9px] font-bold uppercase leading-none tracking-wide ${
+        ehTipoCaixaPadrao(tipo)
+          ? "border-neutral-300 bg-neutral-50 text-neutral-600"
+          : "border-brand-300 bg-brand-50 text-brand-700"
+      } hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      <span className="truncate">{tipo}</span>
+      <ChevronDown size={9} className="shrink-0 opacity-70" />
+    </button>
+  );
+}
+
+function CampoQtdFeita({
+  boa,
+  fraca,
+  onChange,
+}: {
+  boa: number | null;
+  fraca: number | null;
+  onChange: (boa: number | null, fraca: number | null) => void;
+}) {
+  const campo =
+    "h-9 w-[3.25rem] shrink-0 [appearance:textfield] rounded-md bg-transparent px-1.5 text-sm tabular-nums text-neutral-700 placeholder:text-neutral-300 outline-none transition focus:bg-brand-50/70 focus:ring-2 focus:ring-brand-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  return (
+    <div className="flex flex-nowrap items-center gap-0.5 whitespace-nowrap">
+      <input
+        type="number"
+        min={0}
+        className={campo}
+        value={boa ?? ""}
+        placeholder="0"
+        title="Feito bom"
+        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value), fraca)}
+      />
+      <span className="text-neutral-300">+</span>
+      <label className="flex items-center gap-0.5">
+        <input
+          type="number"
+          min={0}
+          className={campo}
+          value={fraca ?? ""}
+          placeholder="0"
+          title="Feito fraco"
+          onChange={(e) => onChange(boa, e.target.value === "" ? null : Number(e.target.value))}
+        />
+        <span className="shrink-0 text-[10px] font-extrabold uppercase text-warning-600">fr</span>
+      </label>
+    </div>
+  );
+}
+
+function QtdFeitaTomate({
+  destinos,
+  qtd,
+  extra,
+}: {
+  destinos: DestinoEntrada[];
+  qtd: number | null;
+  extra?: number;
+}) {
+  const base = resumoFeitaTomate(destinos, qtd);
+  const feita = { ...base, bom: base.bom + (extra ?? 0) };
   const partes: { n: number; sup?: string; aviso?: boolean }[] = [];
   if (feita.bom > 0) partes.push({ n: feita.bom });
   if (feita.aa > 0) partes.push({ n: feita.aa, sup: "aa" });

@@ -1,21 +1,16 @@
 import type { DestinoEntrada, LinhaPlanilha } from "../types";
-import { destinoEhSobra } from "./classificacao";
+import { destinoEhSobra, qtdDestino } from "./classificacao";
 import { addDays } from "./format";
 
-/** Destino com cliente, quantidade ou motivo — o rascunho vazio da modal não entra no banco. */
+/** Só conta como lançado quando tem quantidade ou motivo — cliente sozinho é rascunho. */
 export function destinoPersistivel(destino: DestinoEntrada): boolean {
-  if (
-    (destino.boa != null && destino.boa > 0) ||
-    (destino.fraca != null && destino.fraca > 0) ||
-    (destino.perda != null && destino.perda > 0) ||
-    destino.motivo?.trim()
-  ) {
-    return true;
-  }
-  const cliente = destino.cliente?.trim() ?? "";
-  if (!cliente) return false;
-  if (destinoEhSobra(destino) || cliente.toLowerCase() === "estoque" || cliente.toLowerCase() === "sobra") return false;
-  return true;
+  if (destino.motivo?.trim()) return true;
+  return destinoTemQuantidade(destino);
+}
+
+/** Destino com caixa de verdade, o que aparece na folha. */
+export function destinoTemQuantidade(destino: DestinoEntrada): boolean {
+  return (qtdDestino(destino) ?? 0) > 0;
 }
 
 export interface ResumoDestino {
@@ -170,4 +165,38 @@ export function calcularRendimento(qtd: number | null, resumo: ResumoDestino): n
   if (qtd === null) return 0;
   const destinado = resumo.boa + resumo.fraca;
   return destinado > qtd ? destinado - qtd : 0;
+}
+
+export function temAjusteFeita(linha: { feitaBoa?: number | null; feitaFraca?: number | null }): boolean {
+  return linha.feitaBoa != null || linha.feitaFraca != null;
+}
+
+/** Qtd feita na tela: destinos, mais o que o administrador digitou. */
+export function resumoQtdFeita(linha: {
+  destinos: DestinoEntrada[];
+  qtd: number | null;
+  feitaBoa?: number | null;
+  feitaFraca?: number | null;
+  rendimentoExtra?: number;
+}): ResumoDestino {
+  const base = resumoAlocado(linha.destinos, linha.qtd);
+  const extra = linha.rendimentoExtra ?? 0;
+  const boa = linha.feitaBoa ?? base.boa + (temAjusteFeita(linha) ? 0 : extra);
+  const fraca = linha.feitaFraca ?? base.fraca;
+  return { boa, fraca, perda: base.perda, total: boa + fraca + base.perda };
+}
+
+/** Extra que rendeu além da qtd e além do que já está nos destinos. Não mexe na qtd recebida. */
+export function extraDeFeita(
+  qtd: number | null,
+  destinos: DestinoEntrada[],
+  boa: number | null,
+  fraca: number | null,
+): number {
+  const base = resumoAlocado(destinos, qtd);
+  const feitoBoa = boa ?? base.boa;
+  const feitoFraca = fraca ?? base.fraca;
+  const feito = feitoBoa + feitoFraca;
+  const teto = Math.max(qtd ?? 0, base.boa + base.fraca);
+  return Math.max(0, feito - teto);
 }

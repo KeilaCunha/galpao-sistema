@@ -6,6 +6,7 @@ import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PedidoModal } from "../components/dashboard/PedidoModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
+import { CaixasPainel } from "../components/dashboard/CaixasPainel";
 import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
@@ -25,7 +26,7 @@ import { destinoPersistivel } from "../utils/destino";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
 import { montarPorCliente, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
 
-type Aba = "folha" | "clientes" | "sobras" | "relatorios";
+type Aba = "folha" | "clientes" | "sobras" | "caixas" | "relatorios";
 
 const SHELL = "mx-auto w-full max-w-[2400px] px-3 sm:px-5 lg:px-8";
 
@@ -219,6 +220,7 @@ export default function Dashboard() {
     { id: "folha" as Aba, label: "Folha do dia", visivel: pode("folha") },
     { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length, visivel: pode("porCliente") },
     { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true, visivel: pode("sobras") },
+    { id: "caixas" as Aba, label: "Caixas", visivel: pode("caixas") },
     { id: "relatorios" as Aba, label: "Relatórios", visivel: pode("relatorios") },
   ].filter((tab) => tab.visivel);
 
@@ -347,7 +349,7 @@ export default function Dashboard() {
       </div>
 
       <div className={`${SHELL} py-4 sm:py-5`}>
-        {aba !== "relatorios" && (
+        {aba !== "relatorios" && aba !== "caixas" && (
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
@@ -606,6 +608,7 @@ export default function Dashboard() {
           </div>
         )}
 
+        {aba === "caixas" && <CaixasPainel dia={data} />}
         {aba === "relatorios" && <RelatoriosPainel dia={data} />}
       </div>
 

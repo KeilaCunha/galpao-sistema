@@ -112,10 +112,35 @@ export interface EntradaLancamento {
   precoFraco?: number | null;
   /** Caixas a mais quando a carga rendeu além do informado */
   rendimentoExtra?: number;
+  /** Ajuste manual da qtd feita (boa) — só administrador */
+  feitaBoa?: number | null;
+  /** Ajuste manual da qtd feita (fraca) — só administrador */
+  feitaFraca?: number | null;
   /** Recado curto desta carga — não altera quantidade nem preço */
   observacao?: string;
+  /** Tipo da caixa desta carga. Padrão: Plástica. */
+  tipoCaixa?: string;
   /** Destinos desta carga — preenchidos na própria linha da operação */
   destinos?: DestinoEntrada[];
+}
+
+/** Tipo de caixa cadastrado (plástica, pregada, etc.) */
+export interface TipoCaixa {
+  id: string;
+  nome: string;
+}
+
+/** O que o fornecedor pegou naquele dia, por tipo. O que veio sai da folha. */
+export interface MovimentoCaixa {
+  id: string;
+  data: string;
+  fornecedor: string;
+  /** Tipo cadastrado: plástica, pregado, etc. */
+  tipo: string;
+  /** Mantido só por compatibilidade; o veio vale o da folha. */
+  veio?: number;
+  /** Caixas que o fornecedor levou embora */
+  pegou: number;
 }
 
 /** Pedido do cliente naquele dia — para conferir se o destino lançado está batendo */
@@ -146,8 +171,7 @@ export const MOTIVOS_PERDA = ["Podre", "Falta de peso", "Avaria", "Quebra", "Out
 
 /**
  * Linha da planilha diária (versão digital da folha de papel usada no galpão).
- * A quantidade "feita" (boa/fraca) não é digitada diretamente: ela é somada
- * automaticamente a partir da lista de destinos informada (ver `utils/destino.ts`).
+ * A quantidade "feita" (boa/fraca) vem dos destinos; o administrador pode ajustar.
  */
 export interface LinhaPlanilha {
   id: string;
@@ -157,7 +181,12 @@ export interface LinhaPlanilha {
   preco: number | null;
   precoFraco?: number | null;
   destinos: DestinoEntrada[];
+  rendimentoExtra?: number;
+  feitaBoa?: number | null;
+  feitaFraca?: number | null;
   observacao?: string;
+  /** Tipo da caixa desta carga. Padrão: Plástica. */
+  tipoCaixa?: string;
   /** Data (ISO) de origem, quando esta linha nasceu automaticamente da sobra de outro dia */
   origemSobraDe?: string;
   /** Id da linha (no dia de origem) que gerou esta linha automaticamente, usado para manter a sincronização */

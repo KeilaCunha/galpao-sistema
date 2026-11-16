@@ -73,6 +73,10 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
   }, [open]);
 
   useEffect(() => {
+    if (open && !atual) onClose();
+  }, [open, atual, onClose]);
+
+  useEffect(() => {
     if (!open || !atual) return;
     const origem = origemEstoque ? "estoque" : "folha";
     const vazios = destinos.length - preenchidos;
@@ -125,16 +129,10 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                                 Destino já gravado · {destino.cliente || "sem cliente"} · {qtdDestino(destino) ?? 0}
                               </p>
                             </CampoTravado>
-                          ) : tipoEhEstoque(destino.tipo) ? (
-                            <input
-                              readOnly
-                              value="Sobra"
-                              className={`${modalInputClass} bg-warning-50 text-warning-700`}
-                            />
                           ) : (
                             <Autocomplete
                               tipoItem="cliente"
-                              value={destino.cliente}
+                              value={tipoEhEstoque(destino.tipo) ? "" : destino.cliente === "Estoque" ? "" : destino.cliente}
                               onChange={(cliente) => {
                                 if (destinoEhSobra({ cliente })) {
                                   updateDestino(atual.id, destino.id, {
@@ -144,10 +142,20 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                                   });
                                   return;
                                 }
-                                updateDestino(atual.id, destino.id, { cliente, data: dataDestino });
+                                const patch: Partial<typeof destino> = { cliente, data: dataDestino };
+                                if (tipoEhEstoque(destino.tipo)) {
+                                  Object.assign(patch, patchTipo(tipoPadraoDestino(atual.mercadoria, origemEstoque ? "estoque" : "folha", atual), destino));
+                                }
+                                updateDestino(atual.id, destino.id, patch);
                               }}
                               sugestoes={clientesSugestao}
-                              placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
+                              placeholder={
+                                tipoEhEstoque(destino.tipo)
+                                  ? "Sobra → estoque"
+                                  : destino.tipo === "Perda"
+                                    ? "Perda da carga"
+                                    : "Cliente"
+                              }
                             />
                           )}
                         </td>

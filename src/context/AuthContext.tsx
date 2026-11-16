@@ -190,6 +190,7 @@ export function permissoesIniciais(papel: Usuario["papel"]): Permissoes {
     destinos: true,
     sobras: true,
     porCliente: false,
+    caixas: false,
     relatorios: false,
     cadastros: false,
   };

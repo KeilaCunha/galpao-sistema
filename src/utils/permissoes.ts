@@ -7,6 +7,7 @@ export type ChavePermissao =
   | "destinos"
   | "sobras"
   | "porCliente"
+  | "caixas"
   | "relatorios"
   | "cadastros";
 
@@ -19,6 +20,7 @@ export interface Permissoes {
   destinos: boolean;
   sobras: boolean;
   porCliente: boolean;
+  caixas: boolean;
   relatorios: boolean;
   cadastros: boolean;
 }
@@ -55,6 +57,7 @@ export const PERMISSOES_OPERADOR: Permissoes = {
   destinos: true,
   sobras: true,
   porCliente: false,
+  caixas: false,
   relatorios: false,
   cadastros: false,
 };
@@ -64,6 +67,7 @@ export const PERMISSOES_TODAS: Permissoes = {
   destinos: true,
   sobras: true,
   porCliente: true,
+  caixas: true,
   relatorios: true,
   cadastros: true,
 };
@@ -100,6 +104,7 @@ export const ROTULOS_PERMISSAO: { chave: ChavePermissao; titulo: string; detalhe
   { chave: "destinos", titulo: "Destinos", detalhe: "Informar para onde foi cada caixa." },
   { chave: "sobras", titulo: "Sobras em estoque", detalhe: "Ver e vender o que ficou no galpão." },
   { chave: "porCliente", titulo: "Por cliente", detalhe: "Ver o que cada cliente levou no dia." },
+  { chave: "caixas", titulo: "Caixas", detalhe: "Anotar as caixas que o fornecedor pegou." },
   { chave: "relatorios", titulo: "Relatórios", detalhe: "Gerar PDF e baixar backup." },
   { chave: "cadastros", titulo: "Cadastros", detalhe: "Incluir fornecedor, produto e cliente." },
 ];

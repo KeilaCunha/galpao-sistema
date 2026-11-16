@@ -1,3 +1,4 @@
+import type { RelatorioCaixas } from "./caixas";
 import { formatCurrency, formatDate } from "./format";
 import type { RelatorioFornecedor, RelatorioOperacao } from "./relatorio";
 
@@ -23,7 +24,7 @@ function cabecalho(titulo: string, de: string, ate: string, extra?: string): str
 function estilos(): string {
   return `
     <style>
-      @page { size: A4; margin: 14mm; }
+      @page { size: A4 landscape; margin: 12mm; }
       * { box-sizing: border-box; }
       html, body { background: #fff; color: #171717; }
       body { font-family: "Segoe UI", Arial, sans-serif; font-size: 12px; margin: 0; padding: 8px; }
@@ -181,6 +182,66 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor, verP
       ${verPreco ? `<div class="card"><strong>${formatCurrency(relatorio.valor)}</strong><span>Total a pagar</span></div>` : ""}
     </div>
     ${relatorio.grupos.length === 0 ? `<p class="vazio">Nenhuma carga neste período.</p>` : grupos}
+  `;
+  abrirImpressao(titulo, corpo);
+}
+
+export function imprimirRelatorioCaixas(relatorio: RelatorioCaixas) {
+  const titulo = "Relatório de caixas";
+  const extra = relatorio.tipo ? `Tipo: ${relatorio.tipo}` : "Todos os tipos";
+  const linhasDia = relatorio.movimentos
+    .map(
+      (item) => `
+      <tr>
+        <td>${esc(formatDate(item.data))}</td>
+        <td>${esc(item.fornecedor)}</td>
+        <td class="num">${item.veio || "—"}</td>
+        <td class="num">${item.pegou || "—"}</td>
+        <td>${esc(
+          item.detalhe.length
+            ? item.detalhe.map((parte) => `${parte.pegou} ${parte.tipo}`).join(" · ")
+            : "—",
+        )}</td>
+      </tr>`,
+    )
+    .join("");
+  const linhasFornecedor = relatorio.fornecedores
+    .map(
+      (item) => `
+      <tr>
+        <td>${esc(item.nome)}</td>
+        <td class="num">${item.veio || "—"}</td>
+        <td class="num">${item.pegou || "—"}</td>
+        <td class="num">${item.estoque}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const corpo = `
+    ${cabecalho(titulo, relatorio.de, relatorio.ate, extra)}
+    <div class="cards">
+      <div class="card"><strong>${relatorio.veio}</strong><span>Veio</span></div>
+      <div class="card"><strong>${relatorio.pegou}</strong><span>Pegou</span></div>
+      <div class="card"><strong>${relatorio.estoque}</strong><span>Com os fornecedores</span></div>
+    </div>
+    <h2>Por dia</h2>
+    ${
+      relatorio.movimentos.length === 0
+        ? `<p class="vazio">Nenhum movimento de caixa neste período.</p>`
+        : `<table>
+            <thead><tr><th>Data</th><th>Fornecedor</th><th class="num">Veio</th><th class="num">Pegou</th><th>Tipo</th></tr></thead>
+            <tbody>${linhasDia}</tbody>
+          </table>`
+    }
+    <h2>Por fornecedor</h2>
+    ${
+      relatorio.fornecedores.length === 0
+        ? `<p class="vazio">Nenhum fornecedor neste período.</p>`
+        : `<table>
+            <thead><tr><th>Fornecedor</th><th class="num">Veio</th><th class="num">Pegou</th><th class="num">Estoque dele</th></tr></thead>
+            <tbody>${linhasFornecedor}</tbody>
+          </table>`
+    }
   `;
   abrirImpressao(titulo, corpo);
 }

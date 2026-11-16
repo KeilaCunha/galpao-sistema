@@ -35,7 +35,10 @@ export function Modal({ open, onClose, title, description, children, size = "md"
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/50 p-4 py-10 backdrop-blur-[2px] animate-in">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-neutral-900/50 p-4 py-10 backdrop-blur-[2px] animate-in"
+      onClick={onClose}
+    >
       <div
         className={cn(
           "w-full rounded-2xl bg-white shadow-2xl shadow-neutral-900/20",
@@ -44,6 +47,7 @@ export function Modal({ open, onClose, title, description, children, size = "md"
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onClick={(e) => e.stopPropagation()}
       >
         {title ? (
           <div className="flex items-start justify-between gap-4 border-b border-neutral-100 px-6 py-4">
