@@ -43,8 +43,8 @@ export function resumoDestinos(destinos: DestinoEntrada[]): ResumoDestino {
 }
 
 /**
- * Qtd feita da linha: vendas destinadas + caixas lançadas como sobra para o outro dia.
- * A sobra conta mesmo quando a carga rendeu além da quantidade informada.
+ * Qtd feita: só venda e perda. Sobra não entra como carga boa — vai para o estoque do outro dia.
+ * O total inclui a sobra só para o status (completo / falta fazer).
  */
 export function resumoAlocado(destinos: DestinoEntrada[], _qtd: number | null): ResumoDestino {
   const vendas: DestinoEntrada[] = [];
@@ -56,8 +56,8 @@ export function resumoAlocado(destinos: DestinoEntrada[], _qtd: number | null): 
   const venda = resumoDestinos(vendas);
   const reserva = resumoDestinos(reservas);
   return {
-    boa: venda.boa + reserva.boa,
-    fraca: venda.fraca + reserva.fraca,
+    boa: venda.boa,
+    fraca: venda.fraca,
     perda: venda.perda,
     total: venda.total + reserva.total,
   };
@@ -153,6 +153,16 @@ export function statusQtdFeita(qtd: number | null, resumo: ResumoDestino): Statu
   return "parcial";
 }
 
+/** Dia fechado: cada carga com qtd já foi feita. Extra na sobra do outro dia não impede. */
+export function diaTudoFeito(linhas: LinhaPlanilha[]): boolean {
+  const cargas = linhas.filter((linha) => (linha.qtd ?? 0) > 0);
+  if (cargas.length === 0) return false;
+  return cargas.every((linha) => {
+    const status = statusQtdFeita(linha.qtd, resumoQtdFeita(linha));
+    return status === "completo" || status === "excedente";
+  });
+}
+
 /** Calcula a quantidade que ainda falta distribuir (sobra) em relação à Qtd. informada */
 export function calcularSobra(qtd: number | null, resumo: ResumoDestino): number {
   if (qtd === null) return 0;
@@ -160,11 +170,11 @@ export function calcularSobra(qtd: number | null, resumo: ResumoDestino): number
   return diferenca > 0 ? diferenca : 0;
 }
 
-/** Caixas a mais só do que foi destinado (boa + fraca). Perda não entra no rendimento. */
-export function calcularRendimento(qtd: number | null, resumo: ResumoDestino): number {
+/** Caixas a mais. Sobra destinada é o mesmo extra — não soma com o que já aparece na qtd feita. */
+export function calcularRendimento(qtd: number | null, resumo: ResumoDestino, reserva = 0): number {
   if (qtd === null) return 0;
-  const destinado = resumo.boa + resumo.fraca;
-  return destinado > qtd ? destinado - qtd : 0;
+  const extraFeita = Math.max(0, resumo.boa + resumo.fraca - qtd);
+  return Math.max(extraFeita, reserva);
 }
 
 export function temAjusteFeita(linha: { feitaBoa?: number | null; feitaFraca?: number | null }): boolean {
@@ -180,8 +190,10 @@ export function resumoQtdFeita(linha: {
   rendimentoExtra?: number;
 }): ResumoDestino {
   const base = resumoAlocado(linha.destinos, linha.qtd);
-  const extra = linha.rendimentoExtra ?? 0;
-  const boa = linha.feitaBoa ?? base.boa + (temAjusteFeita(linha) ? 0 : extra);
+  const reserva = Math.max(0, base.total - base.boa - base.fraca - base.perda);
+  const extra = Math.max(0, (linha.rendimentoExtra ?? 0) - reserva);
+  const boaBruta = linha.feitaBoa ?? base.boa + (temAjusteFeita(linha) ? 0 : extra);
+  const boa = temAjusteFeita(linha) ? Math.max(base.boa, boaBruta - reserva) : boaBruta;
   const fraca = linha.feitaFraca ?? base.fraca;
   return { boa, fraca, perda: base.perda, total: boa + fraca + base.perda };
 }
@@ -194,9 +206,10 @@ export function extraDeFeita(
   fraca: number | null,
 ): number {
   const base = resumoAlocado(destinos, qtd);
+  const reserva = Math.max(0, base.total - base.boa - base.fraca - base.perda);
   const feitoBoa = boa ?? base.boa;
   const feitoFraca = fraca ?? base.fraca;
   const feito = feitoBoa + feitoFraca;
-  const teto = Math.max(qtd ?? 0, base.boa + base.fraca);
+  const teto = Math.max(qtd ?? 0, base.boa + base.fraca + reserva);
   return Math.max(0, feito - teto);
 }

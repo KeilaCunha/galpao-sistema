@@ -120,19 +120,22 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                 <tbody>
                   {destinos.map((destino) => {
                     const linhaTravada = destinosTravados && destinoPersistivel(destino);
+                    const ehSobra = destinoEhSobra(destino);
                     return (
                       <tr key={destino.id} className="border-t border-neutral-100">
                         <td className="p-1.5" colSpan={linhaTravada ? 4 : undefined}>
                           {linhaTravada ? (
                             <CampoTravado travado onLiberar={() => setPedirDestinos(true)}>
                               <p className="px-2 py-2 text-sm text-neutral-500">
-                                Destino já gravado · {destino.cliente || "sem cliente"} · {qtdDestino(destino) ?? 0}
+                                Destino já gravado · {ehSobra ? "Sobra" : destino.cliente || "sem cliente"} · {qtdDestino(destino) ?? 0}
                               </p>
                             </CampoTravado>
+                          ) : ehSobra ? (
+                            <p className="px-2 py-2 text-sm font-medium text-warning-700">Sobra → estoque do outro dia</p>
                           ) : (
                             <Autocomplete
                               tipoItem="cliente"
-                              value={tipoEhEstoque(destino.tipo) ? "" : destino.cliente === "Estoque" ? "" : destino.cliente}
+                              value={destino.cliente}
                               onChange={(cliente) => {
                                 if (destinoEhSobra({ cliente })) {
                                   updateDestino(atual.id, destino.id, {
@@ -142,20 +145,10 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                                   });
                                   return;
                                 }
-                                const patch: Partial<typeof destino> = { cliente, data: dataDestino };
-                                if (tipoEhEstoque(destino.tipo)) {
-                                  Object.assign(patch, patchTipo(tipoPadraoDestino(atual.mercadoria, origemEstoque ? "estoque" : "folha", atual), destino));
-                                }
-                                updateDestino(atual.id, destino.id, patch);
+                                updateDestino(atual.id, destino.id, { cliente, data: dataDestino });
                               }}
                               sugestoes={clientesSugestao}
-                              placeholder={
-                                tipoEhEstoque(destino.tipo)
-                                  ? "Sobra → estoque"
-                                  : destino.tipo === "Perda"
-                                    ? "Perda da carga"
-                                    : "Cliente"
-                              }
+                              placeholder={destino.tipo === "Perda" ? "Perda da carga" : "Cliente"}
                             />
                           )}
                         </td>
@@ -164,8 +157,10 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                       <td className="p-1.5">
                         <Select
                           value={
-                            destino.tipo?.trim() ||
-                            (ehTomate(atual.mercadoria) ? "AAA" : "BOM")
+                            ehSobra
+                              ? destino.tipo?.trim() || "Estoque"
+                              : destino.tipo?.trim() ||
+                                (ehTomate(atual.mercadoria) ? "AAA" : "BOM")
                           }
                           onChange={(e) => {
                             const tipo = e.target.value;
@@ -196,7 +191,10 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                           value={qtdDestino(destino) ?? ""}
                           onChange={(e) =>
                             updateDestino(atual.id, destino.id, {
-                              ...patchQtd(destino.tipo, e.target.value === "" ? null : Number(e.target.value)),
+                              ...patchQtd(
+                                ehSobra ? "Estoque" : destino.tipo,
+                                e.target.value === "" ? null : Number(e.target.value),
+                              ),
                               data: dataDestino,
                             })
                           }
@@ -268,15 +266,18 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
                   size="sm"
                   icon={<Plus size={15} />}
                   onClick={() => {
-                    addDestino(atual.id, {
+                    const sobra = {
                       cliente: "Estoque",
                       data: dataDestino,
-                      origem: "folha",
+                      origem: "folha" as const,
                       tipo: "Estoque",
                       boa: null,
                       fraca: null,
                       perda: null,
-                    });
+                    };
+                    const vazio = destinos.find((d) => !destinoPersistivel(d) && !destinoEhSobra(d));
+                    if (vazio) updateDestino(atual.id, vazio.id, sobra);
+                    else addDestino(atual.id, sobra);
                   }}
                 >
                   Sobra
@@ -288,9 +289,9 @@ export function DestinosModal({ open, onClose, entrada, dataDestino, descricao, 
               <p className="text-sm text-neutral-500">Total desta entrega</p>
               {(() => {
                 const estoque = destinos
-                  .filter((d) => tipoEhEstoque(d.tipo))
+                  .filter((d) => destinoEhSobra(d))
                   .reduce((soma, d) => soma + (qtdDestino(d) ?? 0), 0);
-                const r = resumoDestinos(destinos.filter((d) => !tipoEhEstoque(d.tipo)));
+                const r = resumoDestinos(destinos.filter((d) => !destinoEhSobra(d)));
                 const total = r.total + estoque;
                 return (
                   <p className="text-sm font-semibold text-neutral-700">

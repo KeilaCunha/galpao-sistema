@@ -9,6 +9,7 @@ import type {
   LinhaPlanilha,
   MovimentoCaixa,
   PedidoCliente,
+  PrevisaoFornecedor,
   SaidaLancamento,
   TipoCaixa,
 } from "../types";
@@ -31,6 +32,7 @@ import {
   tipoCaixaPersistivel,
 } from "../utils/caixas";
 import { destinoPersistivel } from "../utils/destino";
+import { previsaoExistente, previsaoPersistivel } from "../utils/analise";
 import { mesmaChave, pedidoExistente, pedidoPersistivel } from "../utils/pedido";
 import { toISODate } from "../utils/format";
 import { generateId } from "../utils/id";
@@ -41,6 +43,7 @@ export type StatusBanco = "conectando" | "vivo" | "local";
 interface PlanilhaContextValue {
   entradas: EntradaLancamento[];
   pedidos: PedidoCliente[];
+  previsoes: PrevisaoFornecedor[];
   caixas: MovimentoCaixa[];
   tiposCaixa: TipoCaixa[];
   dataInicial: string;
@@ -57,6 +60,9 @@ interface PlanilhaContextValue {
     dados: Omit<PedidoCliente, "id" | "tipo" | "qtd"> & { tipo?: string; qtd: number | null },
   ) => void;
   removePedido: (id: string) => void;
+  definirPrevisao: (data: string, mercadoria: string, qtd: number, fornecedor?: string) => void;
+  atualizarPrevisao: (id: string, patch: Partial<Omit<PrevisaoFornecedor, "id">>) => void;
+  removePrevisao: (id: string) => void;
   definirCaixa: (data: string, fornecedor: string, tipo: string, pegou: number) => void;
   addTipoCaixa: (nome: string) => boolean;
   removeTipoCaixa: (id: string) => void;
@@ -351,6 +357,9 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   const [pedidos, setPedidos] = useState<PedidoCliente[]>(() =>
     apiRemota ? [] : loadFromStorage("pedidos-v1", []),
   );
+  const [previsoes, setPrevisoes] = useState<PrevisaoFornecedor[]>(() =>
+    loadFromStorage("previsoes-v1", []).filter(previsaoPersistivel),
+  );
   const [caixas, setCaixas] = useState<MovimentoCaixa[]>(() =>
     loadFromStorage("caixas-v1", []).filter(caixaPersistivel),
   );
@@ -363,9 +372,11 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
   const bancoRef = useRef(false);
   const entradasRef = useRef(entradas);
   const pedidosRef = useRef(pedidos);
+  const previsoesRef = useRef(previsoes);
   const gravadasRef = useRef(gravadas);
   entradasRef.current = entradas;
   pedidosRef.current = pedidos;
+  previsoesRef.current = previsoes;
   gravadasRef.current = gravadas;
   const usandoBanco = statusBanco === "vivo";
 
@@ -447,6 +458,10 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     if (apiRemota || usandoBanco) return;
     saveToStorage("pedidos-v1", pedidos.filter(pedidoPersistivel));
   }, [pedidos, usandoBanco]);
+
+  useEffect(() => {
+    saveToStorage("previsoes-v1", previsoes.filter(previsaoPersistivel));
+  }, [previsoes]);
 
   useEffect(() => {
     saveToStorage("caixas-v1", caixas.filter(caixaPersistivel));
@@ -533,6 +548,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
     () => ({
       entradas,
       pedidos,
+      previsoes,
       caixas,
       tiposCaixa,
       dataInicial: toISODate(),
@@ -748,6 +764,47 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
           void api.delete(`/pedidos/${id}`).finally(() => limparPendente(id));
         }
       },
+      definirPrevisao: (data, mercadoria, qtd, fornecedor) => {
+        const nome = mercadoria.trim();
+        if (!nome) return;
+        const qtdN = Number.isFinite(qtd) && qtd > 0 ? qtd : 0;
+        const existente = previsaoExistente(previsoesRef.current, data, nome, fornecedor);
+        const forn = fornecedor?.trim() || undefined;
+        setPrevisoes((prev) => {
+          if (qtdN <= 0) {
+            if (!existente) return prev;
+            return prev.filter((item) => item.id !== existente.id);
+          }
+          if (existente) {
+            if (
+              existente.qtd === qtdN &&
+              existente.mercadoria === nome &&
+              (existente.fornecedor ?? "") === (forn ?? "")
+            ) {
+              return prev;
+            }
+            return prev.map((item) =>
+              item.id === existente.id ? { ...item, mercadoria: nome, qtd: qtdN, fornecedor: forn } : item,
+            );
+          }
+          return [
+            ...prev,
+            { id: generateId("prev"), data, mercadoria: nome, qtd: qtdN, fornecedor: forn },
+          ];
+        });
+      },
+      atualizarPrevisao: (id, patch) => {
+        setPrevisoes((prev) => {
+          const atual = prev.find((item) => item.id === id);
+          if (!atual) return prev;
+          const proximo = { ...atual, ...patch };
+          if (!previsaoPersistivel(proximo)) return prev.filter((item) => item.id !== id);
+          return prev.map((item) => (item.id === id ? proximo : item));
+        });
+      },
+      removePrevisao: (id) => {
+        setPrevisoes((prev) => prev.filter((item) => item.id !== id));
+      },
       removeDestino: (entradaId, destinoId) => {
         setEntradas((prev) => {
           const proxima = prev.map((entrada) =>
@@ -793,7 +850,7 @@ export function PlanilhaProvider({ children }: { children: ReactNode }) {
       resumo: (data) => resumoDoDia(entradas, data),
       sobras: (data) => sobrasPorDia(entradas, data),
     }),
-    [entradas, pedidos, caixas, tiposCaixa, saidas, usandoBanco, statusBanco, gravadas],
+    [entradas, pedidos, previsoes, caixas, tiposCaixa, saidas, usandoBanco, statusBanco, gravadas],
   );
 
   return <PlanilhaContext.Provider value={value}>{children}</PlanilhaContext.Provider>;

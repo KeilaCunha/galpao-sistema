@@ -7,6 +7,8 @@ export type ChavePermissao =
   | "destinos"
   | "sobras"
   | "porCliente"
+  | "pedidos"
+  | "analise"
   | "caixas"
   | "relatorios"
   | "cadastros";
@@ -20,6 +22,8 @@ export interface Permissoes {
   destinos: boolean;
   sobras: boolean;
   porCliente: boolean;
+  pedidos: boolean;
+  analise: boolean;
   caixas: boolean;
   relatorios: boolean;
   cadastros: boolean;
@@ -57,6 +61,8 @@ export const PERMISSOES_OPERADOR: Permissoes = {
   destinos: true,
   sobras: true,
   porCliente: false,
+  pedidos: true,
+  analise: true,
   caixas: false,
   relatorios: false,
   cadastros: false,
@@ -67,6 +73,8 @@ export const PERMISSOES_TODAS: Permissoes = {
   destinos: true,
   sobras: true,
   porCliente: true,
+  pedidos: true,
+  analise: true,
   caixas: true,
   relatorios: true,
   cadastros: true,
@@ -104,6 +112,8 @@ export const ROTULOS_PERMISSAO: { chave: ChavePermissao; titulo: string; detalhe
   { chave: "destinos", titulo: "Destinos", detalhe: "Informar para onde foi cada caixa." },
   { chave: "sobras", titulo: "Sobras em estoque", detalhe: "Ver e vender o que ficou no galpão." },
   { chave: "porCliente", titulo: "Por cliente", detalhe: "Ver o que cada cliente levou no dia." },
+  { chave: "pedidos", titulo: "Meus pedidos", detalhe: "Anotar o pedido do cliente e conferir com o que saiu na folha." },
+  { chave: "analise", titulo: "Análise", detalhe: "Anotar a base que o fornecedor vai mandar no dia de trabalho." },
   { chave: "caixas", titulo: "Caixas", detalhe: "Anotar as caixas que o fornecedor pegou." },
   { chave: "relatorios", titulo: "Relatórios", detalhe: "Gerar PDF e baixar backup." },
   { chave: "cadastros", titulo: "Cadastros", detalhe: "Incluir fornecedor, produto e cliente." },
@@ -130,10 +140,21 @@ export function ehResponsavel(usuario?: Usuario | null): boolean {
   return usuario?.papel === "responsavel";
 }
 
+export function mesclarPermissoes(papel: Papel, permissoes?: Partial<Permissoes> | null): Permissoes {
+  if (papel === "responsavel") return { ...PERMISSOES_TODAS };
+  const base = { ...PERMISSOES_OPERADOR };
+  if (permissoes && typeof permissoes === "object") {
+    (Object.keys(base) as ChavePermissao[]).forEach((chave) => {
+      if (typeof permissoes[chave] === "boolean") base[chave] = permissoes[chave] as boolean;
+    });
+  }
+  return base;
+}
+
 export function pode(usuario: Usuario | null | undefined, chave: ChavePermissao, modoLivre = false): boolean {
   if (modoLivre || !usuario) return true;
   if (ehResponsavel(usuario)) return true;
-  return Boolean(usuario.permissoes?.[chave]);
+  return mesclarPermissoes(usuario.papel, usuario.permissoes)[chave];
 }
 
 export function mesclarColunasFolha(papel: Papel, colunas?: Partial<VisibilidadeFolha> | null): VisibilidadeFolha {

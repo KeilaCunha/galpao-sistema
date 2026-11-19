@@ -4,7 +4,7 @@ import type { CampoTrava, ChaveColunaFolha, Permissoes, Travas, Usuario, Visibil
 import {
   ehResponsavel,
   mesclarColunasFolha,
-  PERMISSOES_TODAS,
+  mesclarPermissoes,
   pode as podeFazer,
   podeVerColuna,
   TRAVAS_PADRAO,
@@ -48,7 +48,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = dados.usuario.token ?? tokenAtual();
     definirToken(token);
     const { token: _t, ...pessoa } = dados.usuario;
-    setUsuario(pessoa);
+    setUsuario({
+      ...pessoa,
+      permissoes: mesclarPermissoes(pessoa.papel, pessoa.permissoes),
+      visibilidadeFolha: mesclarColunasFolha(pessoa.papel, pessoa.visibilidadeFolha),
+    });
     setTravas({ ...TRAVAS_PADRAO, ...dados.travas });
     setPrecisaSetup(false);
     setFase("logado");
@@ -184,16 +188,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export function permissoesIniciais(papel: Usuario["papel"]): Permissoes {
-  if (papel === "responsavel") return { ...PERMISSOES_TODAS };
-  return {
-    folha: true,
-    destinos: true,
-    sobras: true,
-    porCliente: false,
-    caixas: false,
-    relatorios: false,
-    cadastros: false,
-  };
+  return mesclarPermissoes(papel);
 }
 
 export function visibilidadeIniciais(papel: Usuario["papel"]): VisibilidadeFolha {

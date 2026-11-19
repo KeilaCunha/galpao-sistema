@@ -1,4 +1,4 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Leaf, Plus, Settings, Users, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Leaf, Plus, Settings, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { SessaoTopo } from "../components/auth/SessaoTopo";
@@ -6,7 +6,9 @@ import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PedidoModal } from "../components/dashboard/PedidoModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
+import { AnalisePainel } from "../components/dashboard/AnalisePainel";
 import { CaixasPainel } from "../components/dashboard/CaixasPainel";
+import { MeusPedidosPainel } from "../components/dashboard/MeusPedidosPainel";
 import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
@@ -22,11 +24,12 @@ import {
   restanteEntradaDireto,
   sobraOriginal,
 } from "../utils/alocacao";
-import { destinoPersistivel } from "../utils/destino";
+import { destinoPersistivel, diaTudoFeito } from "../utils/destino";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
-import { montarPorCliente, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
+import { previsaoPersistivel } from "../utils/analise";
+import { montarPorCliente, pedidoPersistivel, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
 
-type Aba = "folha" | "clientes" | "sobras" | "caixas" | "relatorios";
+type Aba = "folha" | "clientes" | "sobras" | "pedidos" | "analise" | "caixas" | "relatorios";
 
 const SHELL = "mx-auto w-full max-w-[2400px] px-3 sm:px-5 lg:px-8";
 
@@ -148,6 +151,7 @@ export default function Dashboard() {
     dataInicial,
     entradas,
     pedidos,
+    previsoes,
     addPedido,
     definirPedido,
     removePedido,
@@ -173,6 +177,7 @@ export default function Dashboard() {
 
   const linhasDoDia = getLinhas(data);
   const stats = resumo(data);
+  const tudoFeito = useMemo(() => diaTudoFeito(linhasDoDia), [linhasDoDia]);
   const sobrasPendentes = sobras(data);
   const totalSobras = sobrasPendentes.reduce((soma, dia) => soma + dia.total, 0);
   const ehHoje = data === dataInicial;
@@ -212,6 +217,14 @@ export default function Dashboard() {
   }, [sobrasPendentes, entradas, data]);
 
   const saidasPorCliente = useMemo(() => montarPorCliente(entradas, pedidos, data), [entradas, pedidos, data]);
+  const pedidosDoDia = useMemo(
+    () => pedidos.filter((pedido) => pedido.data === data && pedidoPersistivel(pedido)).length,
+    [pedidos, data],
+  );
+  const analiseDoDia = useMemo(
+    () => previsoes.filter((item) => item.data === data && previsaoPersistivel(item)).length,
+    [previsoes, data],
+  );
 
   const totalBarra = stats.estoque + stats.recebido;
   const pct = (n: number) => (totalBarra > 0 ? `${(n / totalBarra) * 100}%` : "0%");
@@ -220,6 +233,8 @@ export default function Dashboard() {
     { id: "folha" as Aba, label: "Folha do dia", visivel: pode("folha") },
     { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length, visivel: pode("porCliente") },
     { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true, visivel: pode("sobras") },
+    { id: "pedidos" as Aba, label: "Meus pedidos", count: pedidosDoDia, visivel: pode("pedidos") },
+    { id: "analise" as Aba, label: "Análise", count: analiseDoDia, visivel: pode("analise") },
     { id: "caixas" as Aba, label: "Caixas", visivel: pode("caixas") },
     { id: "relatorios" as Aba, label: "Relatórios", visivel: pode("relatorios") },
   ].filter((tab) => tab.visivel);
@@ -349,7 +364,21 @@ export default function Dashboard() {
       </div>
 
       <div className={`${SHELL} py-4 sm:py-5`}>
-        {aba !== "relatorios" && aba !== "caixas" && (
+        {aba === "folha" && tudoFeito && (
+          <div
+            role="status"
+            className="mb-5 flex items-center gap-3 rounded-2xl bg-success-50 px-4 py-3.5 text-success-700"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success-500 text-white">
+              <Check size={18} strokeWidth={2.6} />
+            </span>
+            <div>
+              <p className="text-sm font-bold">Tudo feito neste dia</p>
+              <p className="text-xs font-medium text-success-700/80">Todas as cargas saíram. Nada faltando na folha.</p>
+            </div>
+          </div>
+        )}
+        {aba !== "relatorios" && aba !== "caixas" && aba !== "pedidos" && aba !== "analise" && (
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
@@ -607,6 +636,10 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {aba === "pedidos" && <MeusPedidosPainel dia={data} />}
+
+        {aba === "analise" && <AnalisePainel dia={data} />}
 
         {aba === "caixas" && <CaixasPainel dia={data} />}
         {aba === "relatorios" && <RelatoriosPainel dia={data} />}

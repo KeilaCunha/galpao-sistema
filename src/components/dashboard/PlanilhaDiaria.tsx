@@ -10,7 +10,7 @@ import type { DestinoEntrada, LinhaPlanilha } from "../../types";
 import type { CampoTrava } from "../../utils/permissoes";
 import { campoTravado, ehResponsavel } from "../../utils/permissoes";
 import { abrevCliente } from "../../utils/abrev";
-import { destinoEhSobra, ehTomate, resumoFeitaTomate } from "../../utils/classificacao";
+import { destinoEhSobra, ehTomate, qtdDestino, resumoFeitaTomate } from "../../utils/classificacao";
 import {
   calcularRendimento,
   calcularSobra,
@@ -193,12 +193,16 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
           <tbody>
             {linhasVisiveis.map((linha) => {
               const resumo = resumoQtdFeita(linha);
-              const destinosDia = destinosDaFolha(linha, data).filter((destino) =>
+              const destinosFolha = destinosDaFolha(linha, data);
+              const destinosDia = destinosFolha.filter((destino) =>
                 filtroCliente.trim() ? correspondeCliente(destino, filtroCliente) : true,
               );
               const status = statusQtdFeita(linha.qtd, resumo);
               const sobra = calcularSobra(linha.qtd, resumo);
-              const rendeu = calcularRendimento(linha.qtd, resumo);
+              const reserva = destinosFolha
+                .filter((destino) => destinoEhSobra(destino))
+                .reduce((soma, destino) => soma + (qtdDestino(destino) ?? 0), 0);
+              const rendeu = calcularRendimento(linha.qtd, resumo, reserva);
               return (
                 <tr key={linha.id} className="border-b border-neutral-50 last:border-0">
                   {vis.produtor && (
@@ -303,7 +307,11 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                       <div className="leading-tight">
                         <p className="font-semibold text-neutral-800">
                           {ehTomate(linha.mercadoria) ? (
-                            <QtdFeitaTomate destinos={linha.destinos} qtd={linha.qtd} extra={linha.rendimentoExtra} />
+                            <QtdFeitaTomate
+                              destinos={linha.destinos}
+                              qtd={linha.qtd}
+                              extra={Math.max(0, (linha.rendimentoExtra ?? 0) - reserva)}
+                            />
                           ) : (
                             <>
                               {resumo.boa}
@@ -502,7 +510,6 @@ function destinosDaFolha(linha: LinhaPlanilha, data: string): DestinoEntrada[] {
     (destino) =>
       (destino.data || data) === data &&
       destino.origem !== "estoque" &&
-      !destinoEhSobra(destino) &&
       destinoTemQuantidade(destino),
   );
 }

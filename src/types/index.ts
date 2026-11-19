@@ -153,6 +153,15 @@ export interface PedidoCliente {
   qtd: number;
 }
 
+/** Base do que o fornecedor disse que manda — ainda não colheu */
+export interface PrevisaoFornecedor {
+  id: string;
+  data: string;
+  mercadoria: string;
+  qtd: number;
+  fornecedor?: string;
+}
+
 export type TipoSaida = "cliente" | "perda";
 
 /** Pedido ou perda lançado — o sistema divide sozinho entre os produtores */

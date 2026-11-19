@@ -125,11 +125,7 @@ export function ordemClassificacao(mercadoria: string, tipo: string): number {
 export function resumoFeitaTomate(destinos: DestinoEntrada[], _qtdMeta?: number | null): ResumoFeitaTomate {
   const resumo: ResumoFeitaTomate = { bom: 0, aa: 0, a: 0, fr: 0, perda: 0 };
   for (const destino of destinos) {
-    if (tipoEhEstoque(destino.tipo)) {
-      resumo.bom += destino.boa ?? 0;
-      resumo.fr += destino.fraca ?? 0;
-      continue;
-    }
+    if (destinoEhSobra(destino)) continue;
     if (!tipoEhPerda(destino.tipo)) resumo.perda += destino.perda ?? 0;
     const qtd = qtdDestino(destino) ?? 0;
     if (qtd <= 0) continue;

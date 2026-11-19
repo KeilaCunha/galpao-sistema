@@ -629,7 +629,7 @@ app.delete("/api/entradas/:id", ...autenticado, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.put("/api/pedidos/:id", ...autenticado, exigirPermissao("porCliente"), wrap(async (req, res) => {
+app.put("/api/pedidos/:id", ...autenticado, exigirPermissao("pedidos"), wrap(async (req, res) => {
   const { id } = req.params;
   const body = req.body ?? {};
   const pedido = {
@@ -669,7 +669,7 @@ app.put("/api/pedidos/:id", ...autenticado, exigirPermissao("porCliente"), wrap(
   res.json({ ok: true, id });
 }));
 
-app.delete("/api/pedidos/:id", ...autenticado, exigirPermissao("porCliente"), wrap(async (req, res) => {
+app.delete("/api/pedidos/:id", ...autenticado, exigirPermissao("pedidos"), wrap(async (req, res) => {
   const { id } = req.params;
   await query("DELETE FROM pedidos WHERE id = $1", [id]);
   await tocarVersao();

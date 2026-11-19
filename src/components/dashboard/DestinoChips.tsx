@@ -1,6 +1,6 @@
 import type { DestinoEntrada } from "../../types";
 import { abrevCliente } from "../../utils/abrev";
-import { abrevTipo, qtdDestino, tipoEhEstoque, tipoEhFraco, tipoEhPerda } from "../../utils/classificacao";
+import { abrevTipo, destinoEhSobra, qtdDestino, tipoEhFraco, tipoEhPerda } from "../../utils/classificacao";
 
 export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
   return (
@@ -12,7 +12,7 @@ export function DestinoChips({ destinos }: { destinos: DestinoEntrada[] }) {
         const osDois = !tipo && (destino.boa ?? 0) > 0 && (destino.fraca ?? 0) > 0;
         const fraco = tipoEhFraco(tipo) || soFraca;
         const ehPerda = tipoEhPerda(tipo);
-        const ehEstoque = tipoEhEstoque(tipo);
+        const ehEstoque = destinoEhSobra(destino);
         return (
           <span key={destino.id} className="contents">
             {ehEstoque ? (

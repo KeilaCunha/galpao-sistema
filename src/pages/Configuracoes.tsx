@@ -9,7 +9,7 @@ import { permissoesIniciais, useAuth, visibilidadeIniciais } from "../context/Au
 import { useToast } from "../context/ToastContext";
 import { ehEventoVisivel, fraseAuditoria, type EventoAuditoria } from "../utils/auditoria";
 import type { ChavePermissao, Permissoes, Travas, Usuario, VisibilidadeFolha } from "../utils/permissoes";
-import { COLUNAS_FOLHA_OPERADOR, mesclarColunasFolha, ROTULOS_PERMISSAO, ROTULOS_TRAVA } from "../utils/permissoes";
+import { COLUNAS_FOLHA_OPERADOR, mesclarColunasFolha, mesclarPermissoes, ROTULOS_PERMISSAO, ROTULOS_TRAVA } from "../utils/permissoes";
 import { formatDateTime } from "../utils/format";
 
 type Aba = "pessoas" | "colunas" | "travas" | "historico";
@@ -361,7 +361,7 @@ function PainelPessoas({
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => { setEditando(pessoa); setPinNovo(""); }}>
+                <Button size="sm" variant="outline" onClick={() => { setEditando({ ...pessoa, permissoes: mesclarPermissoes(pessoa.papel, pessoa.permissoes) }); setPinNovo(""); }}>
                   Editar
                 </Button>
               </div>
@@ -369,7 +369,7 @@ function PainelPessoas({
             {pessoa.papel === "operador" && (
               <>
                 <p className="mt-2 text-xs text-neutral-500">
-                  {ROTULOS_PERMISSAO.filter((item) => pessoa.permissoes[item.chave]).map((item) => item.titulo).join(" · ") || "Sem módulos"}
+                  {ROTULOS_PERMISSAO.filter((item) => mesclarPermissoes(pessoa.papel, pessoa.permissoes)[item.chave]).map((item) => item.titulo).join(" · ") || "Sem módulos"}
                 </p>
                 <p className="mt-1 text-xs text-neutral-400">
                   Folha: {resumoColunasFolha(mesclarColunasFolha("operador", pessoa.visibilidadeFolha))}
