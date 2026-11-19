@@ -1,6 +1,7 @@
 import { Leaf, Settings } from "lucide-react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { SessaoTopo } from "../auth/SessaoTopo";
+import { BotaoTema } from "./BotaoTema";
 
 export function AppLayout() {
   const { pathname } = useLocation();
@@ -20,6 +21,7 @@ export function AppLayout() {
               </Link>
             </div>
             <div className="flex items-center gap-2">
+              <BotaoTema />
               {pathname !== "/configuracoes" && (
                 <Link
                   to="/configuracoes"

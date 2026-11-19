@@ -2,6 +2,7 @@ import { CalendarDays, Check, ChevronLeft, ChevronRight, Leaf, Plus, Settings, U
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { SessaoTopo } from "../components/auth/SessaoTopo";
+import { BotaoTema } from "../components/layout/BotaoTema";
 import { DestinoChips } from "../components/dashboard/DestinoChips";
 import { DestinosModal } from "../components/dashboard/DestinosModal";
 import { PedidoModal } from "../components/dashboard/PedidoModal";
@@ -261,7 +262,7 @@ export default function Dashboard() {
             <SessaoTopo />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <button type="button" onClick={() => setData((d) => addDays(d, -1))} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Dia anterior">
               <ChevronLeft size={20} />
             </button>
@@ -308,19 +309,22 @@ export default function Dashboard() {
               <Settings size={14} />
               Administração
             </Link>
-            {pode("cadastros") && (
-              <div className="hidden items-center gap-1 md:flex">
-                <Link to="/fornecedores" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Fornecedores ({fornecedores.length})
-                </Link>
-                <Link to="/produtos" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Produtos ({produtos.length})
-                </Link>
-                <Link to="/clientes" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
-                  Clientes ({clientes.length})
-                </Link>
-              </div>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {pode("cadastros") && (
+                <div className="hidden items-center gap-1 md:flex">
+                  <Link to="/fornecedores" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                    Fornecedores ({fornecedores.length})
+                  </Link>
+                  <Link to="/produtos" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                    Produtos ({produtos.length})
+                  </Link>
+                  <Link to="/clientes" className="rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100">
+                    Clientes ({clientes.length})
+                  </Link>
+                </div>
+              )}
+              <BotaoTema />
+            </div>
           </div>
         </div>
       </header>

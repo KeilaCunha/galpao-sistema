@@ -5,6 +5,7 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { AuthProvider } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 import { PlanilhaProvider } from "./context/PlanilhaContext";
+import { TemaProvider } from "./context/TemaContext";
 import { ToastProvider } from "./context/ToastContext";
 import Clientes from "./pages/Clientes";
 import Configuracoes from "./pages/Configuracoes";
@@ -15,48 +16,50 @@ import Produtos from "./pages/Produtos";
 
 export default function App() {
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <AuthGate>
-          <DataProvider>
-            <PlanilhaProvider>
-              <BrowserRouter>
-                <Routes>
-                  <Route element={<AppLayout />}>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/configuracoes" element={<Configuracoes />} />
-                    <Route
-                      path="/fornecedores"
-                      element={
-                        <GuardCadastro>
-                          <Fornecedores />
-                        </GuardCadastro>
-                      }
-                    />
-                    <Route
-                      path="/produtos"
-                      element={
-                        <GuardCadastro>
-                          <Produtos />
-                        </GuardCadastro>
-                      }
-                    />
-                    <Route
-                      path="/clientes"
-                      element={
-                        <GuardCadastro>
-                          <Clientes />
-                        </GuardCadastro>
-                      }
-                    />
-                    <Route path="/estoque" element={<Estoque />} />
-                  </Route>
-                </Routes>
-              </BrowserRouter>
-            </PlanilhaProvider>
-          </DataProvider>
-        </AuthGate>
-      </AuthProvider>
-    </ToastProvider>
+    <TemaProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <AuthGate>
+            <DataProvider>
+              <PlanilhaProvider>
+                <BrowserRouter>
+                  <Routes>
+                    <Route element={<AppLayout />}>
+                      <Route path="/" element={<Dashboard />} />
+                      <Route path="/configuracoes" element={<Configuracoes />} />
+                      <Route
+                        path="/fornecedores"
+                        element={
+                          <GuardCadastro>
+                            <Fornecedores />
+                          </GuardCadastro>
+                        }
+                      />
+                      <Route
+                        path="/produtos"
+                        element={
+                          <GuardCadastro>
+                            <Produtos />
+                          </GuardCadastro>
+                        }
+                      />
+                      <Route
+                        path="/clientes"
+                        element={
+                          <GuardCadastro>
+                            <Clientes />
+                          </GuardCadastro>
+                        }
+                      />
+                      <Route path="/estoque" element={<Estoque />} />
+                    </Route>
+                  </Routes>
+                </BrowserRouter>
+              </PlanilhaProvider>
+            </DataProvider>
+          </AuthGate>
+        </AuthProvider>
+      </ToastProvider>
+    </TemaProvider>
   );
 }
