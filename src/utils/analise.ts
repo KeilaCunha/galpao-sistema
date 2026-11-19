@@ -41,15 +41,15 @@ function semAcento(valor: string): string {
 export type TotalMercadoria = { mercadoria: string; qtd: number };
 
 export function totaisBasePorMercadoria(previsoes: PrevisaoFornecedor[]): TotalMercadoria[] {
-  const mapa = new Map<string, { nome: string; qtd: number }>();
+  const mapa = new Map<string, TotalMercadoria>();
   for (const item of previsoes) {
     if (!previsaoPersistivel(item)) continue;
     const chave = semAcento(item.mercadoria) || item.mercadoria;
     const atual = mapa.get(chave);
     if (atual) atual.qtd += item.qtd;
-    else mapa.set(chave, { nome: item.mercadoria.trim(), qtd: item.qtd });
+    else mapa.set(chave, { mercadoria: item.mercadoria.trim(), qtd: item.qtd });
   }
-  return [...mapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return [...mapa.values()].sort((a, b) => a.mercadoria.localeCompare(b.mercadoria, "pt-BR"));
 }
 
 export function montarAnalise(
