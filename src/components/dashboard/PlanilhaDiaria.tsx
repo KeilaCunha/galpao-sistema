@@ -257,8 +257,8 @@ export function PlanilhaDiaria({ data, linhas }: PlanilhaDiariaProps) {
                       <div className="leading-tight">
                         <div className="flex items-center gap-0.5">
                           <CampoQtdFeita
-                            boa={linha.feitaBoa ?? (resumo.boa || null)}
-                            fraca={linha.feitaFraca ?? (resumo.fraca || null)}
+                            boa={linha.feitaBoa ?? resumo.boa}
+                            fraca={linha.feitaFraca ?? resumo.fraca}
                             onChange={(boa, fraca) => {
                               const extra = extraDeFeita(linha.qtd, linha.destinos, boa, fraca);
                               updateEntrada(linha.id, {
@@ -667,6 +667,21 @@ function CampoTipoCaixa({
   );
 }
 
+function numeroParaTexto(valor: number | null): string {
+  return valor == null ? "" : String(valor);
+}
+
+function textoParaQtd(texto: string): number | null {
+  const limpo = texto.trim();
+  if (limpo === "") return 0;
+  const numero = Number(limpo);
+  return Number.isFinite(numero) ? Math.max(0, numero) : null;
+}
+
+function soQtdDigitada(valor: string): string {
+  return valor.replace(/[^\d]/g, "");
+}
+
 function CampoQtdFeita({
   boa,
   fraca,
@@ -676,29 +691,58 @@ function CampoQtdFeita({
   fraca: number | null;
   onChange: (boa: number | null, fraca: number | null) => void;
 }) {
+  const [textoBoa, setTextoBoa] = useState(() => numeroParaTexto(boa));
+  const [textoFraca, setTextoFraca] = useState(() => numeroParaTexto(fraca));
+  const [foco, setFoco] = useState<"boa" | "fraca" | null>(null);
+
+  useEffect(() => {
+    if (foco !== "boa") setTextoBoa(numeroParaTexto(boa));
+  }, [boa, foco]);
+
+  useEffect(() => {
+    if (foco !== "fraca") setTextoFraca(numeroParaTexto(fraca));
+  }, [fraca, foco]);
+
+  function gravar(proximaBoa: string, proximaFraca: string) {
+    const nBoa = textoParaQtd(proximaBoa);
+    const nFraca = textoParaQtd(proximaFraca);
+    if (nBoa == null || nFraca == null) return;
+    onChange(nBoa, nFraca);
+  }
+
   const campo =
-    "h-9 w-[3.25rem] shrink-0 [appearance:textfield] rounded-md bg-transparent px-1.5 text-sm tabular-nums text-neutral-700 placeholder:text-neutral-300 outline-none transition focus:bg-brand-50/70 focus:ring-2 focus:ring-brand-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+    "h-9 w-[3.25rem] shrink-0 rounded-md bg-transparent px-1.5 text-sm tabular-nums text-neutral-700 placeholder:text-neutral-300 outline-none transition focus:bg-brand-50/70 focus:ring-2 focus:ring-brand-300";
   return (
     <div className="flex flex-nowrap items-center gap-0.5 whitespace-nowrap">
       <input
-        type="number"
-        min={0}
+        inputMode="numeric"
         className={campo}
-        value={boa ?? ""}
+        value={textoBoa}
         placeholder="0"
         title="Feito bom"
-        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value), fraca)}
+        onFocus={() => setFoco("boa")}
+        onChange={(e) => {
+          const valor = soQtdDigitada(e.target.value);
+          setTextoBoa(valor);
+          gravar(valor, textoFraca);
+        }}
+        onBlur={() => setFoco(null)}
       />
       <span className="text-neutral-300">+</span>
       <label className="flex items-center gap-0.5">
         <input
-          type="number"
-          min={0}
+          inputMode="numeric"
           className={campo}
-          value={fraca ?? ""}
+          value={textoFraca}
           placeholder="0"
           title="Feito fraco"
-          onChange={(e) => onChange(boa, e.target.value === "" ? null : Number(e.target.value))}
+          onFocus={() => setFoco("fraca")}
+          onChange={(e) => {
+            const valor = soQtdDigitada(e.target.value);
+            setTextoFraca(valor);
+            gravar(textoBoa, valor);
+          }}
+          onBlur={() => setFoco(null)}
         />
         <span className="shrink-0 text-[10px] font-extrabold uppercase text-warning-600">fr</span>
       </label>
