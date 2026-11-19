@@ -1,6 +1,6 @@
 import type { RelatorioCaixas } from "./caixas";
 import { formatCurrency, formatDate } from "./format";
-import type { RelatorioFornecedor, RelatorioOperacao } from "./relatorio";
+import type { RelatorioFornecedor, RelatorioOperacao, RelatorioSobra } from "./relatorio";
 
 function esc(valor: string): string {
   return valor
@@ -182,6 +182,62 @@ export function imprimirRelatorioFornecedor(relatorio: RelatorioFornecedor, verP
       ${verPreco ? `<div class="card"><strong>${formatCurrency(relatorio.valor)}</strong><span>Total a pagar</span></div>` : ""}
     </div>
     ${relatorio.grupos.length === 0 ? `<p class="vazio">Nenhuma carga neste período.</p>` : grupos}
+  `;
+  abrirImpressao(titulo, corpo);
+}
+
+function rotuloFraca(qtd: number, fraca: number) {
+  if (fraca <= 0) return "";
+  return fraca >= qtd ? " FR" : ` ${fraca} FR`;
+}
+
+export function imprimirRelatorioSobra(relatorio: RelatorioSobra) {
+  const titulo = relatorio.fornecedor ? `Sobra em estoque · ${relatorio.fornecedor}` : "Sobra em estoque";
+  const resumo =
+    relatorio.porMercadoria.length === 0
+      ? `<p class="vazio">Nada sobrando nesse dia.</p>`
+      : `<table>
+          <thead><tr><th>Mercadoria</th><th class="num">Sobra</th></tr></thead>
+          <tbody>
+            ${relatorio.porMercadoria
+              .map((item) => `<tr><td>${esc(item.mercadoria)}</td><td class="num">${item.qtd} cx</td></tr>`)
+              .join("")}
+          </tbody>
+          <tfoot><tr><td>Total</td><td class="num">${relatorio.total} cx</td></tr></tfoot>
+        </table>`;
+  const grupos = relatorio.dias
+    .map(
+      (dia) => `
+      <div class="grupo">
+        <h3>${esc(formatDate(dia.data))} · ${dia.total} cx</h3>
+        <table>
+          <thead><tr><th>Fornecedor</th><th>Mercadoria</th><th class="num">Sobra</th></tr></thead>
+          <tbody>
+            ${dia.itens
+              .map(
+                (item) => `<tr>
+                  <td>${esc(item.produtor)}</td>
+                  <td>${esc(item.mercadoria)}</td>
+                  <td class="num">${item.qtd} cx${rotuloFraca(item.qtd, item.fraca)}</td>
+                </tr>`,
+              )
+              .join("")}
+          </tbody>
+          <tfoot><tr><td colspan="2">Total do dia</td><td class="num">${dia.total} cx</td></tr></tfoot>
+        </table>
+      </div>`,
+    )
+    .join("");
+
+  const corpo = `
+    ${cabecalho(titulo, relatorio.posicao, relatorio.posicao, relatorio.fornecedor)}
+    <div class="cards">
+      <div class="card"><strong>${relatorio.lotes}</strong><span>Lotes</span></div>
+      <div class="card"><strong>${relatorio.total} cx</strong><span>Sobra em estoque</span></div>
+    </div>
+    <h2>Por mercadoria</h2>
+    ${resumo}
+    ${relatorio.dias.length ? `<h2>Por dia da carga</h2>${grupos}` : ""}
   `;
   abrirImpressao(titulo, corpo);
 }

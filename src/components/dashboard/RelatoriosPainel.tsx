@@ -6,15 +6,13 @@ import { useData } from "../../context/DataContext";
 import { usePlanilha } from "../../context/PlanilhaContext";
 import { useToast } from "../../context/ToastContext";
 import { formatCurrency, formatDate, toISODate } from "../../utils/format";
-import { montarRelatorioFornecedor, montarRelatorioOperacao } from "../../utils/relatorio";
-import { imprimirRelatorioFornecedor, imprimirRelatorioOperacao } from "../../utils/relatorioPdf";
+import { montarRelatorioFornecedor, montarRelatorioOperacao, montarRelatorioSobra } from "../../utils/relatorio";
+import { imprimirRelatorioFornecedor, imprimirRelatorioOperacao, imprimirRelatorioSobra } from "../../utils/relatorioPdf";
+import { Autocomplete } from "../ui/Autocomplete";
 import { Button } from "../ui/Button";
 import { DatePicker } from "../ui/DatePicker";
 
-type TipoRelatorio = "operacao" | "fornecedor";
-
-const inputClass =
-  "h-10 w-[8.5rem] rounded-lg border border-neutral-200 bg-white px-3 text-sm text-neutral-700 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-100";
+type TipoRelatorio = "operacao" | "fornecedor" | "sobra";
 
 export function RelatoriosPainel({ dia }: { dia: string }) {
   const { entradas, usandoBanco } = usePlanilha();
@@ -31,14 +29,13 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
   const inicio = de <= ate ? de : ate;
   const fim = de <= ate ? ate : de;
 
-  const listaFornecedores = useMemo(() => {
-    const nomes = new Set(fornecedores.map((f) => f.nome.trim()).filter(Boolean));
-    for (const entrada of entradas) {
-      const nome = entrada.produtor.trim();
-      if (nome) nomes.add(nome);
-    }
-    return [...nomes].sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [fornecedores, entradas]);
+  const listaFornecedores = useMemo(
+    () =>
+      [...new Set(fornecedores.map((f) => f.nome.trim()).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "pt-BR"),
+      ),
+    [fornecedores],
+  );
 
   const entradasFiltradas = useMemo(() => {
     if (!fornecedorSel) return entradas;
@@ -54,29 +51,28 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
     () => montarRelatorioFornecedor(entradasFiltradas, inicio, fim),
     [entradasFiltradas, inicio, fim],
   );
+  const sobra = useMemo(
+    () => montarRelatorioSobra(entradasFiltradas, ate, fornecedorSel || undefined),
+    [entradasFiltradas, ate, fornecedorSel],
+  );
 
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border border-neutral-200 bg-white p-5">
         <div className="flex flex-wrap items-end gap-4">
-          <DatePicker label="De" value={de} onChange={setDe} />
-          <DatePicker label="Até" value={ate} onChange={setAte} />
+          {tipo !== "sobra" && <DatePicker label="De" value={de} onChange={setDe} />}
+          <DatePicker label={tipo === "sobra" ? "Posição em" : "Até"} value={ate} onChange={setAte} />
 
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Fornecedor</span>
-            <select
-              className={`${inputClass} w-[14rem]`}
+          <div className="w-[16rem]">
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-neutral-400">Fornecedor</p>
+            <Autocomplete
+              tipoItem="fornecedor"
               value={fornecedorSel}
-              onChange={(e) => setFornecedorSel(e.target.value)}
-            >
-              <option value="">Todos</option>
-              {listaFornecedores.map((nome) => (
-                <option key={nome} value={nome}>
-                  {nome}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={setFornecedorSel}
+              sugestoes={listaFornecedores}
+              placeholder="Digite o nome"
+            />
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Relatório</p>
@@ -99,6 +95,15 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
               >
                 Por fornecedor
               </button>
+              <button
+                type="button"
+                onClick={() => setTipo("sobra")}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  tipo === "sobra" ? "bg-brand-600 text-white" : "text-neutral-500 hover:text-neutral-700"
+                }`}
+              >
+                Sobra em estoque
+              </button>
             </div>
           </div>
 
@@ -107,7 +112,9 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
             onClick={() =>
               tipo === "operacao"
                 ? imprimirRelatorioOperacao(operacao)
-                : imprimirRelatorioFornecedor(fornecedor, verPreco)
+                : tipo === "fornecedor"
+                  ? imprimirRelatorioFornecedor(fornecedor, verPreco)
+                  : imprimirRelatorioSobra(sobra)
             }
           >
             Gerar PDF
@@ -165,15 +172,27 @@ export function RelatoriosPainel({ dia }: { dia: string }) {
           </Button>
         </div>
         <p className="mt-3 text-xs text-neutral-400">
-          Digite a data ou use as setas duplas do calendário para voltar um ano. Se for pagar alguém, selecione o
-          fornecedor. O backup guarda a folha inteira para reabrir depois.
+          {tipo === "sobra"
+            ? "A sobra é o que ainda está no estoque nesse dia, igual na aba Sobras. Digite o fornecedor se quiser só o dele."
+            : "Digite a data ou use as setas duplas do calendário para voltar um ano. Digite o fornecedor para filtrar. O backup guarda a folha inteira para reabrir depois."}
         </p>
+        {fornecedorSel && tipo !== "sobra" && sobra.total > 0 ? (
+          <button
+            type="button"
+            onClick={() => setTipo("sobra")}
+            className="mt-2 text-left text-xs font-medium text-brand-700 hover:underline"
+          >
+            {fornecedorSel} ainda tem {sobra.total} cx em estoque — ver só a sobra
+          </button>
+        ) : null}
       </div>
 
       {tipo === "operacao" ? (
         <PreviewOperacao relatorio={operacao} />
-      ) : (
+      ) : tipo === "fornecedor" ? (
         <PreviewFornecedor relatorio={fornecedor} nome={fornecedorSel} verPreco={verPreco} />
+      ) : (
+        <PreviewSobra relatorio={sobra} nome={fornecedorSel} />
       )}
     </div>
   );
@@ -331,6 +350,87 @@ function PreviewFornecedor({
                       </td>
                     </>
                   )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function PreviewSobra({
+  relatorio,
+  nome,
+}: {
+  relatorio: ReturnType<typeof montarRelatorioSobra>;
+  nome: string;
+}) {
+  if (relatorio.dias.length === 0) {
+    return (
+      <div className="rounded-2xl border border-neutral-200 bg-white px-4 py-10 text-center text-sm text-neutral-400">
+        {nome ? `Nada sobrando de ${nome} nesse dia.` : "Nada sobrando nesse dia."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-3">
+        <Card label="Lotes" value={relatorio.lotes} />
+        <Card label="Sobra" value={`${relatorio.total} cx`} cor="danger" />
+      </div>
+
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+        <h3 className="border-b border-neutral-100 px-4 py-3 text-xs font-bold uppercase tracking-widest text-neutral-500">
+          Por mercadoria
+        </h3>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-neutral-50">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
+              <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-danger-500">Sobra</th>
+            </tr>
+          </thead>
+          <tbody>
+            {relatorio.porMercadoria.map((item) => (
+              <tr key={item.mercadoria} className="border-t border-neutral-100">
+                <td className="px-4 py-2.5 font-medium text-neutral-800">{item.mercadoria}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-bold text-danger-600">{item.qtd} cx</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {relatorio.dias.map((dia) => (
+        <section key={dia.data} className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+          <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3">
+            <h3 className="text-sm font-bold text-neutral-800">{formatDate(dia.data)}</h3>
+            <span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">{dia.total} cx</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Fornecedor</th>
+                <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-neutral-500">Mercadoria</th>
+                <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase text-danger-500">Sobra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dia.itens.map((item, i) => (
+                <tr key={`${item.produtor}-${item.mercadoria}-${i}`} className="border-t border-neutral-100">
+                  <td className="px-4 py-2.5 font-semibold text-neutral-800">{item.produtor}</td>
+                  <td className="px-4 py-2.5 text-neutral-600">{item.mercadoria}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-bold text-danger-600">
+                    {item.qtd} cx
+                    {item.fraca > 0 ? (
+                      <sup className="ml-0.5 text-[9px] font-extrabold">
+                        {item.fraca >= item.qtd ? "fr" : `${item.fraca} fr`}
+                      </sup>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
             </tbody>

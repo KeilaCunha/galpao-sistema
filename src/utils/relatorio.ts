@@ -1,5 +1,5 @@
 import type { EntradaLancamento } from "../types";
-import { dataDoDestino, destinosDa, entradaValida } from "./alocacao";
+import { dataDoDestino, destinosDa, entradaValida, sobrasPorDia } from "./alocacao";
 import { destinoEhSobra, qtdDestino, tipoEhFraco, tipoEhPerda } from "./classificacao";
 import { datasNoIntervalo } from "./periodo";
 
@@ -242,5 +242,73 @@ export function montarRelatorioFornecedor(
     grupos: lista,
     veio: lista.reduce((s, g) => s + g.veio, 0),
     valor: lista.reduce((s, g) => s + g.valor, 0),
+  };
+}
+
+export interface LinhaSobra {
+  produtor: string;
+  mercadoria: string;
+  qtd: number;
+  fraca: number;
+}
+
+export interface DiaSobra {
+  data: string;
+  itens: LinhaSobra[];
+  total: number;
+}
+
+export interface RelatorioSobra {
+  posicao: string;
+  fornecedor?: string;
+  dias: DiaSobra[];
+  total: number;
+  lotes: number;
+  porMercadoria: { mercadoria: string; qtd: number }[];
+}
+
+/** Sobra ainda no estoque na manhã do dia informado — a mesma lista da aba Sobras. */
+export function montarRelatorioSobra(
+  entradas: EntradaLancamento[],
+  posicao: string,
+  fornecedor?: string,
+): RelatorioSobra {
+  const alvo = fornecedor?.trim().toLowerCase();
+  const dias = sobrasPorDia(entradas, posicao)
+    .map((dia) => {
+      const itens = dia.itens
+        .filter((item) => !alvo || item.produtor.trim().toLowerCase() === alvo)
+        .map((item) => ({
+          produtor: item.produtor,
+          mercadoria: item.mercadoria,
+          qtd: item.original || item.restante,
+          fraca: item.fraca,
+        }))
+        .filter((item) => item.qtd > 0);
+      return {
+        data: dia.data,
+        itens,
+        total: itens.reduce((soma, item) => soma + item.qtd, 0),
+      };
+    })
+    .filter((dia) => dia.itens.length > 0);
+
+  const porMercadoriaMap = new Map<string, number>();
+  for (const dia of dias) {
+    for (const item of dia.itens) {
+      const nome = item.mercadoria.trim() || "Mercadoria";
+      porMercadoriaMap.set(nome, (porMercadoriaMap.get(nome) ?? 0) + item.qtd);
+    }
+  }
+
+  return {
+    posicao,
+    fornecedor: fornecedor || undefined,
+    dias,
+    total: dias.reduce((soma, dia) => soma + dia.total, 0),
+    lotes: dias.reduce((soma, dia) => soma + dia.itens.length, 0),
+    porMercadoria: [...porMercadoriaMap.entries()]
+      .map(([mercadoria, qtd]) => ({ mercadoria, qtd }))
+      .sort((a, b) => a.mercadoria.localeCompare(b.mercadoria, "pt-BR")),
   };
 }
