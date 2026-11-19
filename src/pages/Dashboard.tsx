@@ -1,4 +1,4 @@
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Leaf, Plus, Settings, Users, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Leaf, Plus, Search, Settings, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { SessaoTopo } from "../components/auth/SessaoTopo";
@@ -16,7 +16,7 @@ import { DatePicker } from "../components/ui/DatePicker";
 import { useAuth } from "../context/AuthContext";
 import { useData } from "../context/DataContext";
 import { usePlanilha } from "../context/PlanilhaContext";
-import { abrevMercadoria } from "../utils/abrev";
+import { abrevMercadoria, chaveMercadoria } from "../utils/abrev";
 import {
   compararLancamento,
   destinosDoEstoqueNoDia,
@@ -168,6 +168,8 @@ export default function Dashboard() {
   const [data, setData] = useState(dataInicial);
   const [aba, setAba] = useState<Aba>("folha");
   const [destinoSobraId, setDestinoSobraId] = useState<string | null>(null);
+  const [filtroSobraFornecedor, setFiltroSobraFornecedor] = useState("");
+  const [filtroSobraMercadoria, setFiltroSobraMercadoria] = useState("");
   const [pedidoAberto, setPedidoAberto] = useState(false);
   const [pedidoCliente, setPedidoCliente] = useState("");
 
@@ -216,6 +218,26 @@ export default function Dashboard() {
         };
       });
   }, [sobrasPendentes, entradas, data]);
+
+  const estoqueFiltrado = useMemo(() => {
+    const filtrando = Boolean(filtroSobraFornecedor.trim() || filtroSobraMercadoria.trim());
+    if (!filtrando) return estoqueExibicao;
+    return estoqueExibicao
+      .map((dia) => {
+        const itens = dia.itens.filter(
+          (item) =>
+            correspondeBusca(item.produtor, filtroSobraFornecedor) &&
+            (correspondeBusca(item.mercadoria, filtroSobraMercadoria) ||
+              correspondeBusca(item.abrev, filtroSobraMercadoria)),
+        );
+        return {
+          ...dia,
+          itens,
+          total: itens.reduce((soma, item) => soma + (item.original || item.restante), 0),
+        };
+      })
+      .filter((dia) => dia.itens.length > 0);
+  }, [estoqueExibicao, filtroSobraFornecedor, filtroSobraMercadoria]);
 
   const saidasPorCliente = useMemo(() => montarPorCliente(entradas, pedidos, data), [entradas, pedidos, data]);
   const pedidosDoDia = useMemo(
@@ -553,7 +575,24 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="flex flex-col gap-5">
-                {estoqueExibicao.map((dia) => (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <CampoFiltroSobra
+                    value={filtroSobraFornecedor}
+                    onChange={setFiltroSobraFornecedor}
+                    placeholder="Pesquisar fornecedor"
+                  />
+                  <CampoFiltroSobra
+                    value={filtroSobraMercadoria}
+                    onChange={setFiltroSobraMercadoria}
+                    placeholder="Pesquisar mercadoria"
+                  />
+                </div>
+                {estoqueFiltrado.length === 0 ? (
+                  <div className="rounded-xl border border-neutral-200 bg-white px-4 py-10 text-center">
+                    <p className="text-sm font-medium text-neutral-500">Nenhuma sobra com esse fornecedor ou mercadoria.</p>
+                  </div>
+                ) : (
+                  estoqueFiltrado.map((dia) => (
                   <div key={dia.data}>
                     <div className="mb-2 flex items-center gap-2">
                       <CalendarDays size={14} className="text-brand-600" />
@@ -635,7 +674,8 @@ export default function Dashboard() {
                       </table>
                     </div>
                   </div>
-                ))}
+                ))
+                )}
               </div>
             )}
           </div>
@@ -664,5 +704,34 @@ export default function Dashboard() {
         })()}
       />
     </div>
+  );
+}
+
+function correspondeBusca(texto: string, termo: string): boolean {
+  const busca = chaveMercadoria(termo);
+  if (!busca) return true;
+  return chaveMercadoria(texto).includes(busca);
+}
+
+function CampoFiltroSobra({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (valor: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="relative block">
+      <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-neutral-400" size={13} />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-8 w-full rounded-md border border-neutral-200 bg-neutral-50 pl-7 pr-2 text-xs font-medium text-neutral-700 placeholder:font-normal placeholder:normal-case placeholder:text-neutral-400 outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
+      />
+    </label>
   );
 }
