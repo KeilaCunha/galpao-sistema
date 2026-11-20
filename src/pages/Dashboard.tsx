@@ -9,7 +9,6 @@ import { PedidoModal } from "../components/dashboard/PedidoModal";
 import { PlanilhaDiaria } from "../components/dashboard/PlanilhaDiaria";
 import { AnalisePainel } from "../components/dashboard/AnalisePainel";
 import { CaixasPainel } from "../components/dashboard/CaixasPainel";
-import { MeusPedidosPainel } from "../components/dashboard/MeusPedidosPainel";
 import { RelatoriosPainel } from "../components/dashboard/RelatoriosPainel";
 import { Button } from "../components/ui/Button";
 import { DatePicker } from "../components/ui/DatePicker";
@@ -28,9 +27,9 @@ import {
 import { destinoPersistivel, diaTudoFeito } from "../utils/destino";
 import { addDays, formatDateLong, weekdayLabel } from "../utils/format";
 import { previsaoPersistivel } from "../utils/analise";
-import { montarPorCliente, pedidoPersistivel, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
+import { montarPorCliente, type ChipCliente, type LinhaPorCliente } from "../utils/pedido";
 
-type Aba = "folha" | "clientes" | "sobras" | "pedidos" | "analise" | "caixas" | "relatorios";
+type Aba = "folha" | "clientes" | "sobras" | "analise" | "caixas" | "relatorios";
 
 const SHELL = "mx-auto w-full max-w-[2400px] px-3 sm:px-5 lg:px-8";
 
@@ -240,10 +239,6 @@ export default function Dashboard() {
   }, [estoqueExibicao, filtroSobraFornecedor, filtroSobraMercadoria]);
 
   const saidasPorCliente = useMemo(() => montarPorCliente(entradas, pedidos, data), [entradas, pedidos, data]);
-  const pedidosDoDia = useMemo(
-    () => pedidos.filter((pedido) => pedido.data === data && pedidoPersistivel(pedido)).length,
-    [pedidos, data],
-  );
   const analiseDoDia = useMemo(
     () => previsoes.filter((item) => item.data === data && previsaoPersistivel(item)).length,
     [previsoes, data],
@@ -256,7 +251,6 @@ export default function Dashboard() {
     { id: "folha" as Aba, label: "Folha do dia", visivel: pode("folha") },
     { id: "clientes" as Aba, label: "Por cliente", count: saidasPorCliente.length, visivel: pode("porCliente") },
     { id: "sobras" as Aba, label: "Sobras em estoque", count: totalSobras, alert: true, visivel: pode("sobras") },
-    { id: "pedidos" as Aba, label: "Meus pedidos", count: pedidosDoDia, visivel: pode("pedidos") },
     { id: "analise" as Aba, label: "Análise", count: analiseDoDia, visivel: pode("analise") },
     { id: "caixas" as Aba, label: "Caixas", visivel: pode("caixas") },
     { id: "relatorios" as Aba, label: "Relatórios", visivel: pode("relatorios") },
@@ -404,7 +398,7 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-        {aba !== "relatorios" && aba !== "caixas" && aba !== "pedidos" && aba !== "analise" && (
+        {aba !== "relatorios" && aba !== "caixas" && aba !== "analise" && (
         <div className="mb-5 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Resumo do dia · o estoque bate?
@@ -680,8 +674,6 @@ export default function Dashboard() {
             )}
           </div>
         )}
-
-        {aba === "pedidos" && <MeusPedidosPainel dia={data} />}
 
         {aba === "analise" && <AnalisePainel dia={data} />}
 

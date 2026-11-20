@@ -165,7 +165,7 @@ export function AnalisePainel({ dia }: { dia: string }) {
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-neutral-600">Base que vai chegar</h3>
           <p className="mt-0.5 text-xs text-neutral-400">
-            Anota a base do fornecedor para o dia de trabalho. Pedido fica em Meus pedidos, um dia antes.
+            Anota a base do fornecedor para o dia de trabalho.
           </p>
         </div>
         <SearchInput

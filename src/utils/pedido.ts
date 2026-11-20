@@ -172,42 +172,6 @@ export function montarPorCliente(
     .filter((grupo) => grupo.itens.length > 0);
 }
 
-export type LinhaComparacaoPedido = {
-  cliente: string;
-  mercadoria: string;
-  pedido: number;
-  feito: number;
-  status: LinhaPorCliente["status"];
-  diferenca: number;
-};
-
-/** Só o que a Keila anotou. Feito e situação vêm da folha; cliente e mercadoria não. */
-export function compararPedidosComFolha(
-  entradas: EntradaLancamento[],
-  pedidos: PedidoCliente[],
-  data: string,
-): LinhaComparacaoPedido[] {
-  const ordem = { falta: 0, passou: 1, bate: 2, "sem-pedido": 3 } as const;
-  return montarPorCliente(entradas, pedidos, data)
-    .flatMap((grupo) =>
-      grupo.itens.map((item) => ({
-        cliente: grupo.cliente,
-        mercadoria: item.mercadoria,
-        pedido: item.totalPedido,
-        feito: item.totalFeito,
-        status: item.status,
-        diferenca: item.diferenca,
-      })),
-    )
-    .filter((linha) => linha.pedido > 0)
-    .sort(
-      (a, b) =>
-        ordem[a.status] - ordem[b.status] ||
-        a.cliente.localeCompare(b.cliente, "pt-BR") ||
-        a.mercadoria.localeCompare(b.mercadoria, "pt-BR"),
-    );
-}
-
 export function pedidoExistente(
   lista: PedidoCliente[],
   data: string,

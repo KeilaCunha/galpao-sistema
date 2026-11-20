@@ -112,7 +112,6 @@ export const ROTULOS_PERMISSAO: { chave: ChavePermissao; titulo: string; detalhe
   { chave: "destinos", titulo: "Destinos", detalhe: "Informar para onde foi cada caixa." },
   { chave: "sobras", titulo: "Sobras em estoque", detalhe: "Ver e vender o que ficou no galpão." },
   { chave: "porCliente", titulo: "Por cliente", detalhe: "Ver o que cada cliente levou no dia." },
-  { chave: "pedidos", titulo: "Meus pedidos", detalhe: "Anotar o pedido do cliente e conferir com o que saiu na folha." },
   { chave: "analise", titulo: "Análise", detalhe: "Anotar a base que o fornecedor vai mandar no dia de trabalho." },
   { chave: "caixas", titulo: "Caixas", detalhe: "Anotar as caixas que o fornecedor pegou." },
   { chave: "relatorios", titulo: "Relatórios", detalhe: "Gerar PDF e baixar backup." },
